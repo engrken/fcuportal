@@ -80,6 +80,7 @@ model Enrollment {
   studentUserId String?
   studentName   String
   studentNumber String?
+  remarks       String?
   createdAt     DateTime     @default(now())
   subject       Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   student       User?        @relation("StudentEnrollments", fields: [studentUserId], references: [id], onDelete: SetNull)
