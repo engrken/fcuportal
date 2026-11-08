@@ -23,3 +23,13 @@ SET weight = allocated.allocated_weight::double precision
 FROM allocated_categories AS allocated
 WHERE category.id = allocated.id
   AND category."parentId" IS NOT NULL;
+
+-- Previous releases set verifiedAt during the student publication action.
+-- Reclassify those auto-finalized rows as provisional. Records whose teacher
+-- or registrar verification happened later retain their verified status.
+UPDATE "Subject"
+SET "gradeStatus" = 'SUBMITTED',
+    "verifiedAt" = NULL
+WHERE "gradeStatus" = 'VERIFIED'
+  AND "submittedAt" IS NOT NULL
+  AND "verifiedAt" = "submittedAt";
