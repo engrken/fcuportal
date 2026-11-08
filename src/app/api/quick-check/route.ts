@@ -48,7 +48,8 @@ export async function POST(request: Request) {
       teacher: subject.teacher.fullName, status: subject.gradeStatus, submittedAt: subject.submittedAt, verifiedAt: subject.verifiedAt,
       percent, finalGrade: equivalent.finalGrade, remarks: enrollment.remarks || equivalent.remarks,
       categories: subject.categories.filter(category => !subject.categories.some(child => child.parentId === category.id)).map(category => {
-        const gradeCategory = { conversionBase: category.conversionBase, assessments: category.assessments.map(item => ({ maxScore: item.maxScore, weight: item.weight, scores: item.scores.filter(score => score.enrollmentId === enrollment.id) })) };
+        const base = category.parentId ? subject.categories.find(parent => parent.id === category.parentId)?.conversionBase : category.conversionBase;
+        const gradeCategory = { conversionBase: base ?? 50, assessments: category.assessments.map(item => ({ maxScore: item.maxScore, weight: item.weight, scores: item.scores.filter(score => score.enrollmentId === enrollment.id) })) };
         return { name: pathFor(category.id), weight: category.weight, percent: calculateCategoryPercent(gradeCategory) };
       })
     };
