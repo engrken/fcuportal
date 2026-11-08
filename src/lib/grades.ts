@@ -55,18 +55,19 @@ export function calculateFinal(categories: GradeCalculationCategory[]) {
     childrenByParent.set(parentId, siblings);
   }
 
-  const calculateCategory = (category: GradeCalculationCategory, path = new Set<string>()): number | null => {
+  const calculateContribution = (category: GradeCalculationCategory, path = new Set<string>()): number | null => {
     if (path.has(category.id)) return null;
     const nextPath = new Set(path).add(category.id);
     const children = childrenByParent.get(category.id) ?? [];
     if (children.length) {
-      return children.reduce((sum, child) => sum + (calculateCategory(child, nextPath) ?? 0) * child.weight / 100, 0);
+      return children.reduce((sum, child) => sum + (calculateContribution(child, nextPath) ?? 0), 0);
     }
     if (!category.assessments.length) return 0;
-    return calculateCategoryPercent({ conversionBase: category.conversionBase, assessments: category.assessments });
+    const percent = calculateCategoryPercent({ conversionBase: category.conversionBase, assessments: category.assessments });
+    return percent === null ? null : percent * category.weight / 100;
   };
 
-  const result = (childrenByParent.get(null) ?? []).reduce((sum, category) => sum + (calculateCategory(category) ?? 0) * category.weight / 100, 0);
+  const result = (childrenByParent.get(null) ?? []).reduce((sum, category) => sum + (calculateContribution(category) ?? 0), 0);
   return Math.round(result * 100) / 100;
 }
 

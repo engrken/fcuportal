@@ -26,7 +26,7 @@ const assessmentSchema = z.object({ categoryId: z.string(), title: z.string().tr
 const assessmentUpdatesSchema = z.object({ assessmentItems: z.array(z.object({ id: z.string(), categoryId: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), weight: z.number().min(0).max(100).nullable(), dueDate: z.string().nullable().optional(), scheduleOverrideReason: z.string().trim().max(120).nullable().optional() })).min(1).max(200) });
 const remarkSchema = z.object({ enrollmentId: z.string(), remark: z.enum(["INC", "NP", "DROPPED"]).nullable() });
 const copyGradingSchema = z.object({ copyGradingFromSubjectId: z.string() });
-const bandsSchema = z.object({ gradeBands: z.array(z.object({ id: z.string(), minPercent: z.number().min(0).max(100), finalGrade: z.string().trim().min(1).max(12), remarks: z.string().trim().min(1).max(40) })).min(2).max(30) });
+const bandsSchema = z.object({ gradeBands: z.array(z.object({ id: z.string().optional(), minPercent: z.number().min(0).max(100), finalGrade: z.string().trim().min(1).max(12), remarks: z.string().trim().min(1).max(40) })).min(2).max(30) });
 export async function PATCH(request: Request, context: Context) {
   const teacher = await requireRole("TEACHER"); if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { subjectId } = await context.params; const subject = await ownedSubject(subjectId, teacher.id, teacher.schoolId);
@@ -48,7 +48,8 @@ export async function PATCH(request: Request, context: Context) {
     const parents = new Set(subject.categories.map(category => category.parentId ?? "root"));
     for (const parentKey of parents) {
       const siblings = subject.categories.filter(category => (category.parentId ?? "root") === parentKey);
-      if (Math.abs(siblings.reduce((sum, category) => sum + category.weight, 0) - 100) > 0.01) return NextResponse.json({ error: `${parentKey === "root" ? "Overall" : "Subcategory"} weights must total exactly 100% before submission.` }, { status: 400 });
+      const expected = parentKey === "root" ? 100 : subject.categories.find(category => category.id === parentKey)?.weight ?? 0;
+      if (Math.abs(siblings.reduce((sum, category) => sum + category.weight, 0) - expected) > 0.01) return NextResponse.json({ error: `${parentKey === "root" ? "Overall" : "Subcategory"} weights must total ${expected}% before submission.` }, { status: 400 });
     }
     const leaves = subject.categories.filter(category => !subject.categories.some(child => child.parentId === category.id));
     for (const category of leaves) {
@@ -59,9 +60,19 @@ export async function PATCH(request: Request, context: Context) {
     const missingScores = subject.enrollments.filter(enrollment => !enrollment.remarks && subject.assessments.some(item => !enrollment.scores.some(score => score.assessmentId === item.id && (score.points !== null || !!score.remark)))).length;
     if (missingScores) return NextResponse.json({ error: `${missingScores} student record(s) have missing assessment scores. Enter a score or set an item status such as Excused, Absent, or Did not submit.` }, { status: 400 });
     const now = new Date();
-    await prisma.subject.update({ where: { id: subjectId }, data: { gradeStatus: "VERIFIED", isPublished: true, submittedAt: now, verifiedAt: now } });
-    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "published final grades to students", entity: "subject", entityId: subjectId } });
-    return NextResponse.json({ ok: true, gradeStatus: "VERIFIED", submittedAt: now, verifiedAt: now });
+    await prisma.subject.update({ where: { id: subjectId }, data: { gradeStatus: "SUBMITTED", isPublished: true, submittedAt: now, verifiedAt: null } });
+    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "submitted provisional grades to students", entity: "subject", entityId: subjectId } });
+    return NextResponse.json({ ok: true, gradeStatus: "SUBMITTED", submittedAt: now, verifiedAt: null });
+  }
+  if ("verifyGrades" in input) {
+    if (input.verifyGrades !== true) return NextResponse.json({ error: "Confirm that the official school-record grades have been submitted to the Registrar." }, { status: 400 });
+    if (subject.gradeStatus !== "SUBMITTED") return NextResponse.json({ error: "Submit these grades to students before marking them verified with the Registrar." }, { status: 409 });
+    const now = new Date();
+    await prisma.$transaction([
+      prisma.subject.update({ where: { id: subjectId }, data: { gradeStatus: "VERIFIED", verifiedAt: now } }),
+      prisma.auditEvent.create({ data: { actorId: teacher.id, action: "teacher confirmed official grades submitted to Registrar", entity: "subject", entityId: subjectId } })
+    ]);
+    return NextResponse.json({ ok: true, gradeStatus: "VERIFIED", submittedAt: subject.submittedAt, verifiedAt: now });
   }
   if (subject.gradeStatus === "VERIFIED") return NextResponse.json({ error: "This grade record has been finalized. Recall it before making changes." }, { status: 409 });
   if ("updateEnrollment" in input) {
@@ -155,8 +166,16 @@ export async function PATCH(request: Request, context: Context) {
     const values = parsed.data.gradeBands;
     if (new Set(values.map(b => b.finalGrade)).size !== values.length || new Set(values.map(b => b.minPercent)).size !== values.length) return NextResponse.json({ error: "Each grade and threshold must be unique." }, { status: 400 });
     if (values.filter(b => b.minPercent === 0).length !== 1) return NextResponse.json({ error: "Include exactly one grade band starting at 0%." }, { status: 400 });
-    for (const band of values) if (!subject.gradeBands.some(existing => existing.id === band.id)) return NextResponse.json({ error: "A grade band does not belong to this subject." }, { status: 400 });
-    for (const band of values) await prisma.gradeBand.update({ where: { id: band.id }, data: { minPercent: band.minPercent, finalGrade: band.finalGrade, remarks: band.remarks } });
+    if (values.some(band => band.id && !subject.gradeBands.some(existing => existing.id === band.id))) return NextResponse.json({ error: "A grade band does not belong to this subject." }, { status: 400 });
+    await prisma.$transaction(async tx => {
+      const retainedIds = values.flatMap(band => band.id && !band.id.startsWith("draft-") ? [band.id] : []);
+      for (const band of values) {
+        const data = { minPercent: band.minPercent, finalGrade: band.finalGrade, remarks: band.remarks };
+        if (band.id && !band.id.startsWith("draft-")) await tx.gradeBand.update({ where: { id: band.id }, data });
+        else await tx.gradeBand.create({ data: { ...data, subjectId, sortOrder: values.indexOf(band) } });
+      }
+      await tx.gradeBand.deleteMany({ where: { subjectId, ...(retainedIds.length ? { id: { notIn: retainedIds } } : {}) } });
+    });
     await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "updated grade scale", entity: "subject", entityId: subjectId } });
     return NextResponse.json({ ok: true });
   }
@@ -176,7 +195,8 @@ export async function PATCH(request: Request, context: Context) {
     for (const parentKey of parents) {
       const siblings = values.filter(category => (category.parentId ?? "root") === parentKey);
       const total = siblings.reduce((sum, category) => sum + category.weight, 0);
-      if (Math.abs(total - 100) > 0.01) return NextResponse.json({ error: `${parentKey === "root" ? "Top-level" : "Subcategory"} weights must total exactly 100%.` }, { status: 400 });
+      const expected = parentKey === "root" ? 100 : byId.get(parentKey)?.weight ?? 0;
+      if (Math.abs(total - expected) > 0.01) return NextResponse.json({ error: `${parentKey === "root" ? "Course group" : "Child category"} weights must total ${expected}%.` }, { status: 400 });
     }
     for (const category of values) {
       const existing = subject.categories.find(c => c.id === category.id)!;
@@ -202,7 +222,11 @@ export async function POST(request: Request, context: Context) {
     if (parentId && subject.assessments.some(assessment => assessment.categoryId === parentId)) return NextResponse.json({ error: "Move assessment items out of this category before adding subcategories." }, { status: 409 });
     const siblings = subject.categories.filter(category => (category.parentId ?? null) === parentId);
     if (subject.categories.some(category => category.name.toLocaleLowerCase() === parsed.data.name.toLocaleLowerCase())) return NextResponse.json({ error: "A category with that name already exists in this class." }, { status: 409 });
-    const category = await prisma.gradeCategory.create({ data: { subjectId, parentId, name: parsed.data.name, weight: parsed.data.weight ?? 0, conversionBase: parsed.data.conversionBase ?? 0, sortOrder: siblings.length } });
+    const expected = parentId ? subject.categories.find(category => category.id === parentId)?.weight ?? 0 : 100;
+    const allocated = siblings.reduce((sum, category) => sum + category.weight, 0);
+    const requested = parsed.data.weight ?? Math.max(0, expected - allocated);
+    if (requested > expected - allocated + 0.01) return NextResponse.json({ error: `Only ${(expected - allocated).toFixed(2)}% remains under this ${parentId ? "parent" : "course"}.` }, { status: 400 });
+    const category = await prisma.gradeCategory.create({ data: { subjectId, parentId, name: parsed.data.name, weight: requested, conversionBase: parsed.data.conversionBase ?? 0, sortOrder: siblings.length } });
     await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "created grading category", entity: "grade-category", entityId: category.id } });
     return NextResponse.json({ category }, { status: 201 });
   }
