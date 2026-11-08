@@ -28,7 +28,7 @@ export async function getSession() {
   try {
     const { payload } = await jwtVerify(token, key());
     if (!payload.sub) return null;
-    return await prisma.user.findUnique({ where: { id: payload.sub }, select: { id: true, role: true, fullName: true, email: true, studentNumber: true } });
+    return await prisma.user.findUnique({ where: { id: payload.sub }, select: { id: true, role: true, fullName: true, email: true, studentNumber: true, courseProgram: true, yearLevel: true } });
   } catch { return null; }
 }
 
