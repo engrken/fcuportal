@@ -20,7 +20,7 @@ const categorySchema = z.object({ categories: z.array(z.object({ id: z.string(),
 const newCategorySchema = z.object({ name: z.string().trim().min(1).max(80), parentId: z.string().nullable().optional(), weight: z.number().min(0).max(100).optional(), conversionBase: z.number().min(0).max(100).optional() });
 const rosterSchema = z.object({ students: z.array(z.object({ studentName: z.string().trim().min(2).max(120), studentNumber: z.string().trim().max(40).optional() })).min(1).max(100) });
 const assessmentSchema = z.object({ categoryId: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), weight: z.number().min(0).max(100).nullable().optional(), dueDate: z.string().optional() });
-const assessmentUpdatesSchema = z.object({ assessmentItems: z.array(z.object({ id: z.string(), categoryId: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), weight: z.number().min(0).max(100).nullable() })).min(1).max(200) });
+const assessmentUpdatesSchema = z.object({ assessmentItems: z.array(z.object({ id: z.string(), categoryId: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), weight: z.number().min(0).max(100).nullable(), dueDate: z.string().nullable().optional() })).min(1).max(200) });
 const remarkSchema = z.object({ enrollmentId: z.string(), remark: z.enum(["INC", "NP", "DROPPED"]).nullable() });
 const copyGradingSchema = z.object({ copyGradingFromSubjectId: z.string() });
 const bandsSchema = z.object({ gradeBands: z.array(z.object({ id: z.string(), minPercent: z.number().min(0).max(100), finalGrade: z.string().trim().min(1).max(12), remarks: z.string().trim().min(1).max(40) })).min(2).max(30) });
@@ -106,7 +106,7 @@ export async function PATCH(request: Request, context: Context) {
     if (items.length !== subject.assessments.length || items.some(item => !subject.assessments.some(existing => existing.id === item.id))) return NextResponse.json({ error: "The assessment list changed. Refresh and try again." }, { status: 409 });
     if (items.some(item => !subject.categories.some(category => category.id === item.categoryId) || subject.categories.some(category => category.parentId === item.categoryId))) return NextResponse.json({ error: "Choose a leaf category for every assessment item." }, { status: 400 });
     if (items.some(item => item.maxScore < Math.max(0, ...subject.enrollments.flatMap(enrollment => enrollment.scores.filter(score => score.assessmentId === item.id).map(score => score.points ?? 0))))) return NextResponse.json({ error: "Perfect score cannot be lower than a score already entered." }, { status: 400 });
-    for (const item of items) await prisma.assessment.update({ where: { id: item.id }, data: { categoryId: item.categoryId, title: item.title, maxScore: item.maxScore, weight: item.weight } });
+    for (const item of items) await prisma.assessment.update({ where: { id: item.id }, data: { categoryId: item.categoryId, title: item.title, maxScore: item.maxScore, weight: item.weight, dueDate: item.dueDate ? new Date(item.dueDate) : null } });
     await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "updated assessment setup", entity: "subject", entityId: subjectId } });
     return NextResponse.json({ ok: true });
   }
