@@ -30,6 +30,15 @@ export async function PATCH(request: Request, context: Context) {
   const { subjectId } = await context.params; const subject = await ownedSubject(subjectId, teacher.id);
   if (!subject) return NextResponse.json({ error: "Subject not found" }, { status: 404 });
   const input = await request.json();
+  if ("recallGrades" in input) {
+    if (input.recallGrades !== true) return NextResponse.json({ error: "Confirm recall of the submitted grades." }, { status: 400 });
+    if (subject.gradeStatus !== "SUBMITTED") return NextResponse.json({ error: "Only submitted, not-yet-verified grades can be recalled by the teacher." }, { status: 409 });
+    await prisma.$transaction([
+      prisma.subject.update({ where: { id: subjectId }, data: { gradeStatus: "DRAFT", isPublished: false, submittedAt: null, verifiedAt: null } }),
+      prisma.auditEvent.create({ data: { actorId: teacher.id, action: "recalled submitted grades to draft", entity: "subject", entityId: subjectId } })
+    ]);
+    return NextResponse.json({ ok: true, gradeStatus: "DRAFT" });
+  }
   if ("submitGrades" in input) {
     if (subject.gradeStatus === "VERIFIED") return NextResponse.json({ error: "These grades have been verified and are final. Ask the registrar to reopen the record before making a correction." }, { status: 409 });
     if (input.submitGrades !== true) return NextResponse.json({ error: "Confirm grade submission." }, { status: 400 });
