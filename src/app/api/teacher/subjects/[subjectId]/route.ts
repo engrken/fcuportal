@@ -7,7 +7,7 @@ import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
 
 type Context = { params: Promise<{ subjectId: string }> };
 async function ownedSubject(subjectId: string, teacherId: string) {
-  return prisma.subject.findFirst({ where: { id: subjectId, teacherId }, include: { categories: { orderBy: { sortOrder: "asc" } }, gradeBands: { orderBy: { sortOrder: "asc" } }, assessments: { orderBy: { createdAt: "asc" } }, enrollments: { orderBy: { studentName: "asc" }, include: { scores: true } } } });
+  return prisma.subject.findFirst({ where: { id: subjectId, teacherId }, include: { categories: { orderBy: { sortOrder: "asc" } }, gradeBands: { orderBy: { sortOrder: "asc" } }, assessments: { orderBy: { createdAt: "asc" } }, enrollments: { orderBy: { studentName: "asc" }, include: { scores: true, student: { select: { email: true } } } } } });
 }
 export async function GET(_request: Request, context: Context) {
   const teacher = await requireRole("TEACHER"); if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -20,6 +20,7 @@ export async function GET(_request: Request, context: Context) {
 const categorySchema = z.object({ categories: z.array(z.object({ id: z.string(), parentId: z.string().nullable().optional(), name: z.string().trim().min(1).max(80), weight: z.number().min(0).max(100), conversionBase: z.number().min(0).max(100) })).min(1).max(40) });
 const newCategorySchema = z.object({ name: z.string().trim().min(1).max(80), parentId: z.string().nullable().optional(), weight: z.number().min(0).max(100).optional(), conversionBase: z.number().min(0).max(100).optional() });
 const rosterSchema = z.object({ students: z.array(z.object({ studentName: z.string().trim().min(2).max(120), studentNumber: z.string().trim().max(40).optional() })).min(1).max(100) });
+const enrollmentUpdateSchema = z.object({ updateEnrollment: z.object({ enrollmentId: z.string(), studentName: z.string().trim().min(2).max(120), studentNumber: z.string().trim().max(40).nullable().optional() }) });
 const assessmentSchema = z.object({ categoryId: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), weight: z.number().min(0).max(100).nullable().optional(), dueDate: z.string().optional(), scheduleOverrideReason: z.string().trim().max(120).optional() });
 const assessmentUpdatesSchema = z.object({ assessmentItems: z.array(z.object({ id: z.string(), categoryId: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), weight: z.number().min(0).max(100).nullable(), dueDate: z.string().nullable().optional(), scheduleOverrideReason: z.string().trim().max(120).nullable().optional() })).min(1).max(200) });
 const remarkSchema = z.object({ enrollmentId: z.string(), remark: z.enum(["INC", "NP", "DROPPED"]).nullable() });
@@ -62,6 +63,26 @@ export async function PATCH(request: Request, context: Context) {
     return NextResponse.json({ ok: true, gradeStatus: "SUBMITTED", submittedAt: now });
   }
   if (subject.gradeStatus === "VERIFIED") return NextResponse.json({ error: "This grade record has been verified and is final. Ask the registrar to reopen it before editing." }, { status: 409 });
+  if ("updateEnrollment" in input) {
+    const parsed = enrollmentUpdateSchema.safeParse(input); if (!parsed.success) return NextResponse.json({ error: "Enter a valid student name and number." }, { status: 400 });
+    const { enrollmentId, studentName, studentNumber } = parsed.data.updateEnrollment;
+    const enrollment = subject.enrollments.find(item => item.id === enrollmentId);
+    if (!enrollment) return NextResponse.json({ error: "Student roster record not found." }, { status: 404 });
+    const number = studentNumber?.trim() || null;
+    if (number && subject.enrollments.some(item => item.id !== enrollmentId && item.studentNumber?.toLocaleLowerCase() === number.toLocaleLowerCase())) return NextResponse.json({ error: "That student number is already in this class roster." }, { status: 409 });
+    const changedNumber = (enrollment.studentNumber || null) !== number;
+    await prisma.enrollment.update({ where: { id: enrollmentId }, data: { studentName, studentNumber: number, ...(changedNumber ? { studentUserId: null } : {}) } });
+    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: changedNumber ? "updated roster details and unlinked the mismatched student account" : "updated roster student name", entity: "enrollment", entityId: enrollmentId } });
+    return NextResponse.json({ ok: true, accountUnlinked: changedNumber && !!enrollment.studentUserId });
+  }
+  if ("deleteEnrollmentId" in input) {
+    const enrollmentId = z.string().safeParse(input.deleteEnrollmentId); if (!enrollmentId.success) return NextResponse.json({ error: "Choose a student roster record to remove." }, { status: 400 });
+    const enrollment = subject.enrollments.find(item => item.id === enrollmentId.data);
+    if (!enrollment) return NextResponse.json({ error: "Student roster record not found." }, { status: 404 });
+    await prisma.enrollment.delete({ where: { id: enrollment.id } });
+    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "removed student and scores from class roster", entity: "enrollment", entityId: enrollment.id } });
+    return NextResponse.json({ ok: true });
+  }
   if ("copyGradingFromSubjectId" in input) {
     const parsed = copyGradingSchema.safeParse(input); if (!parsed.success) return NextResponse.json({ error: "Choose a class grading setup to copy." }, { status: 400 });
     if (parsed.data.copyGradingFromSubjectId === subjectId) return NextResponse.json({ error: "Choose a different class." }, { status: 400 });
