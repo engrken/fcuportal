@@ -45,4 +45,4 @@ The grade scale and default weights are examples based on the supplied grade she
 
 ## Notes on data migration
 
-The legacy HTML page performs a local name search inside an uploaded workbook; it is not a multi-user database. This portal does not import the supplied workbooks automatically. Teachers can paste roster rows into a class using `Name, Student Number` lines. Assessment definitions and marks should be entered or migrated only after the institution approves the handling process and the conversion is reconciled against the source grade sheets.
+The legacy HTML page performs a local name search inside an uploaded workbook; it is not a multi-user database. This portal does not import the supplied workbooks automatically. Teachers can paste roster rows into a class using `Full Name<TAB>Student Number` lines. Assessment definitions and marks should be entered or migrated only after the institution approves the handling process and the conversion is reconciled against the source grade sheets.
