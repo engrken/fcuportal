@@ -18,8 +18,8 @@ export async function GET(_request: Request, context: Context) {
   return NextResponse.json({ subject: { ...subject, enrollments: details } });
 }
 
-const categorySchema = z.object({ categories: z.array(z.object({ id: z.string(), parentId: z.string().nullable().optional(), name: z.string().trim().min(1).max(80), weight: z.number().min(0).max(100), conversionBase: z.number().min(0).max(100) })).min(1).max(40) });
-const newCategorySchema = z.object({ name: z.string().trim().min(1).max(80), parentId: z.string().nullable().optional(), weight: z.number().min(0).max(100).optional(), conversionBase: z.number().min(0).max(100).optional() });
+const categorySchema = z.object({ categories: z.array(z.object({ id: z.string(), parentId: z.string().nullable().optional(), name: z.string().trim().min(1).max(80), weight: z.number().min(0).max(100), conversionBase: z.number().min(1).max(100) })).min(1).max(40) });
+const newCategorySchema = z.object({ name: z.string().trim().min(1).max(80), parentId: z.string().nullable().optional(), weight: z.number().min(0).max(100).optional(), conversionBase: z.number().min(1).max(100).optional() });
 const rosterSchema = z.object({ students: z.array(z.object({ studentName: z.string().trim().min(2).max(120), studentNumber: z.string().trim().max(40).optional() })).min(1).max(100) });
 const enrollmentUpdateSchema = z.object({ updateEnrollment: z.object({ enrollmentId: z.string(), studentName: z.string().trim().min(2).max(120), studentNumber: z.string().trim().max(40).nullable().optional() }) });
 const assessmentSchema = z.object({ categoryId: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), weight: z.number().min(0).max(100).nullable().optional(), dueDate: z.string().optional(), scheduleOverrideReason: z.string().trim().max(120).optional() });
@@ -110,7 +110,7 @@ export async function PATCH(request: Request, context: Context) {
         const index = pending.findIndex(category => !category.parentId || categoryIds.has(category.parentId));
         if (index < 0) throw new Error("The source grading structure contains a cycle.");
         const [category] = pending.splice(index, 1);
-        const created = await tx.gradeCategory.create({ data: { subjectId, parentId: category.parentId ? categoryIds.get(category.parentId) : null, name: category.name, weight: category.weight, conversionBase: 0, sortOrder: category.sortOrder } });
+        const created = await tx.gradeCategory.create({ data: { subjectId, parentId: category.parentId ? categoryIds.get(category.parentId) : null, name: category.name, weight: category.weight, conversionBase: category.conversionBase ?? 50, sortOrder: category.sortOrder } });
         categoryIds.set(category.id, created.id);
       }
       for (const band of source.gradeBands) await tx.gradeBand.create({ data: { subjectId, minPercent: band.minPercent, finalGrade: band.finalGrade, remarks: band.remarks, sortOrder: band.sortOrder } });
@@ -202,7 +202,7 @@ export async function PATCH(request: Request, context: Context) {
       const existing = subject.categories.find(c => c.id === category.id)!;
       if ((category.parentId ?? null) !== (existing.parentId ?? null) && subject.assessments.some(a => a.categoryId === existing.id)) return NextResponse.json({ error: "Move assessments before changing a category that contains them." }, { status: 409 });
     }
-    for (const category of values) await prisma.gradeCategory.update({ where: { id: category.id }, data: { parentId: category.parentId ?? null, name: category.name, weight: category.weight, conversionBase: 0 } });
+    for (const category of values) await prisma.gradeCategory.update({ where: { id: category.id }, data: { parentId: category.parentId ?? null, name: category.name, weight: category.weight, conversionBase: category.conversionBase } });
     await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "updated grading weights", entity: "subject", entityId: subjectId } });
     return NextResponse.json({ ok: true });
   }
@@ -226,7 +226,8 @@ export async function POST(request: Request, context: Context) {
     const allocated = siblings.reduce((sum, category) => sum + category.weight, 0);
     const requested = parsed.data.weight ?? Math.max(0, expected - allocated);
     if (requested > expected - allocated + 0.01) return NextResponse.json({ error: `Only ${(expected - allocated).toFixed(2)}% remains under this ${parentId ? "parent" : "course"}.` }, { status: 400 });
-    const category = await prisma.gradeCategory.create({ data: { subjectId, parentId, name: parsed.data.name, weight: requested, conversionBase: parsed.data.conversionBase ?? 0, sortOrder: siblings.length } });
+    const parentBase = parentId ? subject.categories.find(item => item.id === parentId)?.conversionBase ?? 50 : 50;
+    const category = await prisma.gradeCategory.create({ data: { subjectId, parentId, name: parsed.data.name, weight: requested, conversionBase: parsed.data.conversionBase ?? parentBase, sortOrder: siblings.length } });
     await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "created grading category", entity: "grade-category", entityId: category.id } });
     return NextResponse.json({ category }, { status: 201 });
   }

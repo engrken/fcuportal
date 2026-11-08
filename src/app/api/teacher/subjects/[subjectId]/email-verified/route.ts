@@ -51,8 +51,9 @@ export async function POST(_request: Request, context: Context) {
     const equivalent = equivalentFromBands(percent, subject.gradeBands);
     const leaves = subject.categories.filter(category => !subject.categories.some(child => child.parentId === category.id));
     const parts = leaves.map(category => {
+      const base = category.parentId ? subject.categories.find(parent => parent.id === category.parentId)?.conversionBase : category.conversionBase;
       const score = calculateCategoryPercent({
-        conversionBase: category.conversionBase,
+        conversionBase: base ?? 50,
         assessments: category.assessments.map(item => ({ maxScore: item.maxScore, weight: item.weight, scores: item.scores.filter(value => value.enrollmentId === enrollment.id) }))
       });
       let weight = category.weight;

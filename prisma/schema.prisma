@@ -165,7 +165,7 @@ model GradeCategory {
   parentId    String?
   name        String
   weight      Float
-  conversionBase Float    @default(0)
+  conversionBase Float    @default(50)
   sortOrder   Int         @default(0)
   subject     Subject     @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   parent      GradeCategory? @relation("GradeCategoryTree", fields: [parentId], references: [id], onDelete: Cascade)
