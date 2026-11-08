@@ -34,14 +34,14 @@ export function calculateCategoryPercent(category: Pick<GradeCalculationCategory
     if (!totalWeight) return null;
     const weighted = active.reduce((sum, assessment) => {
       const score = assessment.scores[0];
-      const points = score?.points ?? 0;
+      const points = score?.remark === "PRESENT" ? assessment.maxScore : score?.remark === "ABSENT" ? 0 : score?.points ?? 0;
       const percent = base + (points / assessment.maxScore) * (100 - base);
       return sum + percent * (assessment.weight ?? 0);
     }, 0);
     return Math.round((weighted / totalWeight) * 100) / 100;
   }
   const possible = active.reduce((sum, assessment) => sum + assessment.maxScore, 0);
-  const earned = active.reduce((sum, assessment) => sum + (assessment.scores[0]?.points ?? 0), 0);
+  const earned = active.reduce((sum, assessment) => sum + (assessment.scores[0]?.remark === "PRESENT" ? assessment.maxScore : assessment.scores[0]?.remark === "ABSENT" ? 0 : assessment.scores[0]?.points ?? 0), 0);
   return possible ? Math.round((base + (earned / possible) * (100 - base)) * 100) / 100 : null;
 }
 

@@ -52,3 +52,4 @@
 .portal-layout[data-bs-theme="dark"] .privacy-mini,.portal-layout[data-bs-theme="dark"] .final-grades-summary span,.portal-layout[data-bs-theme="dark"] .quick-grade-summary span{background:#1d2b40;color:#b8c5d8}
 .portal-layout[data-bs-theme="dark"] .privacy-mini b,.portal-layout[data-bs-theme="dark"] .grade-percent,.portal-layout[data-bs-theme="dark"] .subject-card-title,.portal-layout[data-bs-theme="dark"] .grade-result strong{color:#e4ebf6}
 .portal-layout[data-bs-theme="dark"] .scale-card,.portal-layout[data-bs-theme="dark"] .analytics-panel,.portal-layout[data-bs-theme="dark"] .analytics-stat{background:#172235!important}
+.attendance-day-note{display:flex;flex-direction:column;justify-content:center;gap:4px;min-height:64px;padding:10px 13px;border:1px solid var(--bs-border-color,#dce4ef);border-radius:10px;background:var(--bs-tertiary-bg,#f7f9fc);font-size:.8rem}.attendance-day-note small{color:var(--bs-secondary-color,#74839a)}

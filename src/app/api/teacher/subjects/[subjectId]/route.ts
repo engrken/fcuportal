@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { calculateCategoryPercent, calculateFinal, equivalentFromBands } from "@/lib/grades";
+import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
 
 type Context = { params: Promise<{ subjectId: string }> };
 async function ownedSubject(subjectId: string, teacherId: string) {
@@ -19,8 +20,8 @@ export async function GET(_request: Request, context: Context) {
 const categorySchema = z.object({ categories: z.array(z.object({ id: z.string(), parentId: z.string().nullable().optional(), name: z.string().trim().min(1).max(80), weight: z.number().min(0).max(100), conversionBase: z.number().min(0).max(100) })).min(1).max(40) });
 const newCategorySchema = z.object({ name: z.string().trim().min(1).max(80), parentId: z.string().nullable().optional(), weight: z.number().min(0).max(100).optional(), conversionBase: z.number().min(0).max(100).optional() });
 const rosterSchema = z.object({ students: z.array(z.object({ studentName: z.string().trim().min(2).max(120), studentNumber: z.string().trim().max(40).optional() })).min(1).max(100) });
-const assessmentSchema = z.object({ categoryId: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), weight: z.number().min(0).max(100).nullable().optional(), dueDate: z.string().optional() });
-const assessmentUpdatesSchema = z.object({ assessmentItems: z.array(z.object({ id: z.string(), categoryId: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), weight: z.number().min(0).max(100).nullable(), dueDate: z.string().nullable().optional() })).min(1).max(200) });
+const assessmentSchema = z.object({ categoryId: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), weight: z.number().min(0).max(100).nullable().optional(), dueDate: z.string().optional(), scheduleOverrideReason: z.string().trim().max(120).optional() });
+const assessmentUpdatesSchema = z.object({ assessmentItems: z.array(z.object({ id: z.string(), categoryId: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), weight: z.number().min(0).max(100).nullable(), dueDate: z.string().nullable().optional(), scheduleOverrideReason: z.string().trim().max(120).nullable().optional() })).min(1).max(200) });
 const remarkSchema = z.object({ enrollmentId: z.string(), remark: z.enum(["INC", "NP", "DROPPED"]).nullable() });
 const copyGradingSchema = z.object({ copyGradingFromSubjectId: z.string() });
 const bandsSchema = z.object({ gradeBands: z.array(z.object({ id: z.string(), minPercent: z.number().min(0).max(100), finalGrade: z.string().trim().min(1).max(12), remarks: z.string().trim().min(1).max(40) })).min(2).max(30) });
@@ -105,8 +106,16 @@ export async function PATCH(request: Request, context: Context) {
     const items = parsed.data.assessmentItems;
     if (items.length !== subject.assessments.length || items.some(item => !subject.assessments.some(existing => existing.id === item.id))) return NextResponse.json({ error: "The assessment list changed. Refresh and try again." }, { status: 409 });
     if (items.some(item => !subject.categories.some(category => category.id === item.categoryId) || subject.categories.some(category => category.parentId === item.categoryId))) return NextResponse.json({ error: "Choose a leaf category for every assessment item." }, { status: 400 });
+    for (const item of items.filter(value => value.title.toLocaleLowerCase().startsWith("attendance ·"))) {
+      const weekday = item.dueDate ? weekdayFromDate(item.dueDate.slice(0, 10)) : null;
+      if (weekday === null) return NextResponse.json({ error: `Choose a date for ${item.title}.` }, { status: 400 });
+      if (!subject.categories.some(category => category.id === item.categoryId && category.name.toLocaleLowerCase().includes("attendance"))) return NextResponse.json({ error: "Attendance days must use a category whose name includes Attendance." }, { status: 400 });
+      if (!scheduleWeekdays(subject.schedule).includes(weekday) && (item.scheduleOverrideReason || "").trim().length < 4) return NextResponse.json({ error: `${item.title} is outside the class schedule. Add a make-up class reason or select a scheduled day.` }, { status: 400 });
+    }
+    const attendanceDates = items.filter(item => item.title.toLocaleLowerCase().startsWith("attendance ·")).map(item => item.dueDate?.slice(0, 10));
+    if (attendanceDates.some((date, index) => date && attendanceDates.indexOf(date) !== index)) return NextResponse.json({ error: "Only one attendance day can be recorded per date." }, { status: 409 });
     if (items.some(item => item.maxScore < Math.max(0, ...subject.enrollments.flatMap(enrollment => enrollment.scores.filter(score => score.assessmentId === item.id).map(score => score.points ?? 0))))) return NextResponse.json({ error: "Perfect score cannot be lower than a score already entered." }, { status: 400 });
-    for (const item of items) await prisma.assessment.update({ where: { id: item.id }, data: { categoryId: item.categoryId, title: item.title, maxScore: item.maxScore, weight: item.weight, dueDate: item.dueDate ? new Date(item.dueDate) : null } });
+    for (const item of items) await prisma.assessment.update({ where: { id: item.id }, data: { categoryId: item.categoryId, title: item.title, maxScore: item.maxScore, weight: item.weight, dueDate: item.dueDate ? new Date(item.dueDate) : null, scheduleOverrideReason: item.scheduleOverrideReason || null } });
     await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "updated assessment setup", entity: "subject", entityId: subjectId } });
     return NextResponse.json({ ok: true });
   }
@@ -180,9 +189,20 @@ export async function POST(request: Request, context: Context) {
   if (!subject.categories.some(c => c.id === parsed.data.categoryId)) return NextResponse.json({ error: "Choose a category in this subject." }, { status: 400 });
   const category = subject.categories.find(item => item.id === parsed.data.categoryId);
   if (category && subject.categories.some(item => item.parentId === category.id)) return NextResponse.json({ error: "Choose a leaf category for assessment items." }, { status: 400 });
+  const isAttendance = parsed.data.title.toLocaleLowerCase().startsWith("attendance ·");
+  if (isAttendance) {
+    const weekday = parsed.data.dueDate ? weekdayFromDate(parsed.data.dueDate.slice(0, 10)) : null;
+    if (weekday === null) return NextResponse.json({ error: "Choose a valid date for this attendance day." }, { status: 400 });
+    if (!scheduleWeekdays(subject.schedule).length) return NextResponse.json({ error: "Set the class schedule before adding attendance days." }, { status: 400 });
+    if (!subject.categories.some(item => item.id === parsed.data.categoryId && item.name.toLocaleLowerCase().includes("attendance"))) return NextResponse.json({ error: "Choose a category whose name includes Attendance for attendance days." }, { status: 400 });
+    const matches = scheduleWeekdays(subject.schedule).includes(weekday);
+    if (!matches && (parsed.data.scheduleOverrideReason || "").trim().length < 4) return NextResponse.json({ error: "This date is outside the class schedule. Add a reason such as “Make-up class”." }, { status: 400 });
+    const duplicate = subject.assessments.some(item => item.title.toLocaleLowerCase().startsWith("attendance ·") && item.dueDate?.toISOString().slice(0, 10) === parsed.data.dueDate?.slice(0, 10));
+    if (duplicate) return NextResponse.json({ error: "An attendance day already exists for this date." }, { status: 409 });
+  }
   const existingItems = subject.assessments.filter(item => item.categoryId === parsed.data.categoryId);
   if (existingItems.some(item => item.weight !== null) && (parsed.data.weight === undefined || parsed.data.weight === null)) return NextResponse.json({ error: "This category uses item weights. Enter a weight for this item." }, { status: 400 });
-  const assessment = await prisma.assessment.create({ data: { ...parsed.data, weight: parsed.data.weight ?? null, subjectId, dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : null } });
+  const assessment = await prisma.assessment.create({ data: { ...parsed.data, weight: parsed.data.weight ?? null, subjectId, dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : null, scheduleOverrideReason: parsed.data.scheduleOverrideReason || null } });
   await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "created assessment", entity: "assessment", entityId: assessment.id } });
   return NextResponse.json({ assessment }, { status: 201 });
 }
