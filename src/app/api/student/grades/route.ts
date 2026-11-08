@@ -19,7 +19,7 @@ export async function GET() {
                 include: {
                   scores: {
                     where: { enrollment: { studentUserId: student.id } },
-                    select: { points: true }
+                    select: { points: true, remark: true }
                   }
                 }
               }
@@ -43,7 +43,7 @@ export async function GET() {
     const categories = leafCategories.map(category => {
       let effectiveWeight = category.weight; let parentId = category.parentId;
       while (parentId) { const parent = subject.categories.find(item => item.id === parentId); if (!parent) break; effectiveWeight *= parent.weight / 100; parentId = parent.parentId; }
-      return { name: pathFor(category.id), weight: effectiveWeight, assessments: category.assessments.map(item => ({ id: item.id, title: item.title, points: item.scores[0]?.points ?? null, maxScore: item.maxScore, weight: item.weight, dueDate: item.dueDate })) };
+      return { name: pathFor(category.id), weight: effectiveWeight, assessments: category.assessments.map(item => ({ id: item.id, title: item.title, points: item.scores[0]?.points ?? null, remark: item.scores[0]?.remark ?? null, maxScore: item.maxScore, weight: item.weight, dueDate: item.dueDate })) };
     });
     return { id: enrollment.id, code: subject.code, title: subject.title, term: subject.term, academicYear: subject.academicYear, teacher: subject.teacher.fullName, status: subject.gradeStatus, submittedAt: subject.submittedAt, verifiedAt: subject.verifiedAt, percent, finalGrade: equivalent.finalGrade, remarks: enrollment.remarks || equivalent.remarks, categories };
   });
