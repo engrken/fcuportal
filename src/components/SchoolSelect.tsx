@@ -8,7 +8,6 @@ export default function SchoolSelect({ value, onChange, required = true, id = "s
     fetch("/api/schools").then(response => response.json()).then(data => {
       const options = (data.schools || []) as SchoolOption[];
       setSchools(options);
-      if (!value && options.length === 1) onChange(options[0].id);
     }).catch(() => setSchools([]));
   }, []);
   return <select id={id} className="form-select form-select-lg mb-3" aria-label="School" name="schoolId" value={value} onChange={event => onChange(event.target.value)} required={required}>
