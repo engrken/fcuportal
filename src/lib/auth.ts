@@ -32,7 +32,7 @@ export async function getSession() {
   } catch { return null; }
 }
 
-export async function requireRole(role: "TEACHER" | "STUDENT") {
+export async function requireRole(role: "TEACHER" | "STUDENT" | "REGISTRAR") {
   const user = await getSession();
   if (!user || user.role !== role) return null;
   return user;

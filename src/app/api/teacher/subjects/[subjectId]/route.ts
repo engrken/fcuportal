@@ -21,7 +21,6 @@ const newCategorySchema = z.object({ name: z.string().trim().min(1).max(80), par
 const rosterSchema = z.object({ students: z.array(z.object({ studentName: z.string().trim().min(2).max(120), studentNumber: z.string().trim().max(40).optional() })).min(1).max(100) });
 const assessmentSchema = z.object({ categoryId: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), weight: z.number().min(0).max(100).nullable().optional(), dueDate: z.string().optional() });
 const assessmentUpdatesSchema = z.object({ assessmentItems: z.array(z.object({ id: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), weight: z.number().min(0).max(100).nullable() })).min(1).max(200) });
-const publishSchema = z.object({ isPublished: z.boolean() });
 const remarkSchema = z.object({ enrollmentId: z.string(), remark: z.enum(["INC", "NP", "DROPPED"]).nullable() });
 const copyGradingSchema = z.object({ copyGradingFromSubjectId: z.string() });
 const bandsSchema = z.object({ gradeBands: z.array(z.object({ id: z.string(), minPercent: z.number().min(0).max(100), finalGrade: z.string().trim().min(1).max(12), remarks: z.string().trim().min(1).max(40) })).min(2).max(30) });
@@ -30,6 +29,29 @@ export async function PATCH(request: Request, context: Context) {
   const { subjectId } = await context.params; const subject = await ownedSubject(subjectId, teacher.id);
   if (!subject) return NextResponse.json({ error: "Subject not found" }, { status: 404 });
   const input = await request.json();
+  if ("submitGrades" in input) {
+    if (subject.gradeStatus === "VERIFIED") return NextResponse.json({ error: "These grades have been verified and are final. Ask the registrar to reopen the record before making a correction." }, { status: 409 });
+    if (input.submitGrades !== true) return NextResponse.json({ error: "Confirm grade submission." }, { status: 400 });
+    if (!subject.categories.length || !subject.assessments.length || !subject.enrollments.length) return NextResponse.json({ error: "Add grading categories, assessment items, and students before submitting grades." }, { status: 400 });
+    const parents = new Set(subject.categories.map(category => category.parentId ?? "root"));
+    for (const parentKey of parents) {
+      const siblings = subject.categories.filter(category => (category.parentId ?? "root") === parentKey);
+      if (Math.abs(siblings.reduce((sum, category) => sum + category.weight, 0) - 100) > 0.01) return NextResponse.json({ error: `${parentKey === "root" ? "Overall" : "Subcategory"} weights must total exactly 100% before submission.` }, { status: 400 });
+    }
+    const leaves = subject.categories.filter(category => !subject.categories.some(child => child.parentId === category.id));
+    for (const category of leaves) {
+      const items = subject.assessments.filter(item => item.categoryId === category.id);
+      if (category.weight > 0 && !items.length) return NextResponse.json({ error: `Add at least one assessment item to ${category.name} before submission.` }, { status: 400 });
+      if (items.some(item => item.weight !== null) && (items.some(item => item.weight === null) || Math.abs(items.reduce((sum, item) => sum + (item.weight ?? 0), 0) - 100) > 0.01)) return NextResponse.json({ error: `Assessment item weights in ${category.name} must total exactly 100%.` }, { status: 400 });
+    }
+    const missingScores = subject.enrollments.filter(enrollment => !enrollment.remarks && subject.assessments.some(item => !enrollment.scores.some(score => score.assessmentId === item.id && score.points !== null))).length;
+    if (missingScores) return NextResponse.json({ error: `${missingScores} student record(s) have missing assessment scores. Complete the scores or set the appropriate INC, NP, or DROPPED remark before submission.` }, { status: 400 });
+    const now = new Date();
+    await prisma.subject.update({ where: { id: subjectId }, data: { gradeStatus: "SUBMITTED", isPublished: true, submittedAt: now, verifiedAt: null } });
+    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "submitted grades for registrar verification", entity: "subject", entityId: subjectId } });
+    return NextResponse.json({ ok: true, gradeStatus: "SUBMITTED", submittedAt: now });
+  }
+  if (subject.gradeStatus === "VERIFIED") return NextResponse.json({ error: "This grade record has been verified and is final. Ask the registrar to reopen it before editing." }, { status: 409 });
   if ("copyGradingFromSubjectId" in input) {
     const parsed = copyGradingSchema.safeParse(input); if (!parsed.success) return NextResponse.json({ error: "Choose a class grading setup to copy." }, { status: 400 });
     if (parsed.data.copyGradingFromSubjectId === subjectId) return NextResponse.json({ error: "Choose a different class." }, { status: 400 });
@@ -129,12 +151,6 @@ export async function PATCH(request: Request, context: Context) {
     await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "updated grading weights", entity: "subject", entityId: subjectId } });
     return NextResponse.json({ ok: true });
   }
-  const publish = publishSchema.safeParse(input);
-  if (publish.success) {
-    await prisma.subject.update({ where: { id: subjectId }, data: { isPublished: publish.data.isPublished } });
-    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: publish.data.isPublished ? "published grades" : "hid grades", entity: "subject", entityId: subjectId } });
-    return NextResponse.json({ ok: true });
-  }
   return NextResponse.json({ error: "Unsupported update." }, { status: 400 });
 }
 
@@ -142,6 +158,7 @@ export async function POST(request: Request, context: Context) {
   const teacher = await requireRole("TEACHER"); if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { subjectId } = await context.params; const subject = await ownedSubject(subjectId, teacher.id);
   if (!subject) return NextResponse.json({ error: "Subject not found" }, { status: 404 });
+  if (subject.gradeStatus === "VERIFIED") return NextResponse.json({ error: "This grade record has been verified and is final. Ask the registrar to reopen it before editing." }, { status: 409 });
   const input = await request.json();
   if ("category" in input) {
     const parsed = newCategorySchema.safeParse(input.category); if (!parsed.success) return NextResponse.json({ error: "Provide a category name." }, { status: 400 });
