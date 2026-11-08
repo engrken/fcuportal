@@ -12,13 +12,15 @@ export async function GET(_request: Request, context: Context) {
   const teacher = await requireRole("TEACHER"); if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { subjectId } = await context.params; const subject = await ownedSubject(subjectId, teacher.id);
   if (!subject) return NextResponse.json({ error: "Subject not found" }, { status: 404 });
-  const details = subject.enrollments.map(enrollment => ({ ...enrollment, finalPercent: calculateFinal(subject.categories.map(category => ({ weight: category.weight, conversionBase: category.conversionBase, assessments: subject.assessments.filter(a => a.categoryId === category.id).map(a => ({ maxScore: a.maxScore, scores: enrollment.scores.filter(s => s.assessmentId === a.id) })) }))) }));
+  const details = subject.enrollments.map(enrollment => ({ ...enrollment, finalPercent: calculateFinal(subject.categories.map(category => ({ id: category.id, parentId: category.parentId, weight: category.weight, conversionBase: category.conversionBase, assessments: subject.assessments.filter(a => a.categoryId === category.id).map(a => ({ maxScore: a.maxScore, weight: a.weight, scores: enrollment.scores.filter(s => s.assessmentId === a.id) })) }))) }));
   return NextResponse.json({ subject: { ...subject, enrollments: details } });
 }
 
-const categorySchema = z.object({ categories: z.array(z.object({ id: z.string(), name: z.string().trim().min(1).max(80), weight: z.number().min(0).max(100), conversionBase: z.number().min(0).max(100) })).min(1).max(20) });
+const categorySchema = z.object({ categories: z.array(z.object({ id: z.string(), parentId: z.string().nullable().optional(), name: z.string().trim().min(1).max(80), weight: z.number().min(0).max(100), conversionBase: z.number().min(0).max(100) })).min(1).max(40) });
+const newCategorySchema = z.object({ name: z.string().trim().min(1).max(80), parentId: z.string().nullable().optional() });
 const rosterSchema = z.object({ students: z.array(z.object({ studentName: z.string().trim().min(2).max(120), studentNumber: z.string().trim().max(40).optional() })).min(1).max(100) });
-const assessmentSchema = z.object({ categoryId: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), dueDate: z.string().optional() });
+const assessmentSchema = z.object({ categoryId: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), weight: z.number().min(0).max(100).nullable().optional(), dueDate: z.string().optional() });
+const assessmentUpdatesSchema = z.object({ assessmentItems: z.array(z.object({ id: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), weight: z.number().min(0).max(100).nullable() })).min(1).max(200) });
 const publishSchema = z.object({ isPublished: z.boolean() });
 const remarkSchema = z.object({ enrollmentId: z.string(), remark: z.enum(["INC", "NP", "DROPPED"]).nullable() });
 const copyGradingSchema = z.object({ copyGradingFromSubjectId: z.string() });
@@ -37,7 +39,15 @@ export async function PATCH(request: Request, context: Context) {
     await prisma.$transaction(async tx => {
       await tx.gradeCategory.deleteMany({ where: { subjectId } });
       await tx.gradeBand.deleteMany({ where: { subjectId } });
-      for (const category of source.categories) await tx.gradeCategory.create({ data: { subjectId, name: category.name, weight: category.weight, conversionBase: category.conversionBase, sortOrder: category.sortOrder } });
+      const categoryIds = new Map<string, string>();
+      const pending = [...source.categories];
+      while (pending.length) {
+        const index = pending.findIndex(category => !category.parentId || categoryIds.has(category.parentId));
+        if (index < 0) throw new Error("The source grading structure contains a cycle.");
+        const [category] = pending.splice(index, 1);
+        const created = await tx.gradeCategory.create({ data: { subjectId, parentId: category.parentId ? categoryIds.get(category.parentId) : null, name: category.name, weight: category.weight, conversionBase: category.conversionBase, sortOrder: category.sortOrder } });
+        categoryIds.set(category.id, created.id);
+      }
       for (const band of source.gradeBands) await tx.gradeBand.create({ data: { subjectId, minPercent: band.minPercent, finalGrade: band.finalGrade, remarks: band.remarks, sortOrder: band.sortOrder } });
       await tx.auditEvent.create({ data: { actorId: teacher.id, action: `copied grading setup from ${source.code}`, entity: "subject", entityId: subjectId } });
     });
@@ -49,6 +59,38 @@ export async function PATCH(request: Request, context: Context) {
     if (!enrollment) return NextResponse.json({ error: "Student roster record not found." }, { status: 404 });
     await prisma.enrollment.update({ where: { id: enrollment.id }, data: { remarks: parsed.data.remark } });
     await prisma.auditEvent.create({ data: { actorId: teacher.id, action: parsed.data.remark ? `set student remark ${parsed.data.remark}` : "cleared student remark", entity: "enrollment", entityId: enrollment.id } });
+    return NextResponse.json({ ok: true });
+  }
+  if ("deleteCategoryId" in input) {
+    const categoryId = z.string().safeParse(input.deleteCategoryId); if (!categoryId.success) return NextResponse.json({ error: "Choose a category to remove." }, { status: 400 });
+    const category = subject.categories.find(item => item.id === categoryId.data);
+    if (!category) return NextResponse.json({ error: "Category not found." }, { status: 404 });
+    if (subject.assessments.some(item => item.categoryId === category.id) || subject.categories.some(item => item.parentId === category.id)) return NextResponse.json({ error: "Move its assessment items and subcategories before removing it." }, { status: 409 });
+    await prisma.gradeCategory.delete({ where: { id: category.id } });
+    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "deleted empty grading category", entity: "grade-category", entityId: category.id } });
+    return NextResponse.json({ ok: true });
+  }
+  if ("deleteAssessmentId" in input) {
+    const assessmentId = z.string().safeParse(input.deleteAssessmentId); if (!assessmentId.success) return NextResponse.json({ error: "Choose an assessment to remove." }, { status: 400 });
+    const assessment = subject.assessments.find(item => item.id === assessmentId.data);
+    if (!assessment) return NextResponse.json({ error: "Assessment not found." }, { status: 404 });
+    if (subject.enrollments.some(enrollment => enrollment.scores.some(score => score.assessmentId === assessment.id && score.points !== null))) return NextResponse.json({ error: "This assessment has recorded scores. Clear or export those scores before removing it." }, { status: 409 });
+    await prisma.assessment.delete({ where: { id: assessment.id } });
+    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "deleted unscored assessment", entity: "assessment", entityId: assessment.id } });
+    return NextResponse.json({ ok: true });
+  }
+  if ("assessmentItems" in input) {
+    const parsed = assessmentUpdatesSchema.safeParse(input); if (!parsed.success) return NextResponse.json({ error: "Check assessment names, maximum points, and item weights." }, { status: 400 });
+    const items = parsed.data.assessmentItems;
+    if (items.length !== subject.assessments.length || items.some(item => !subject.assessments.some(existing => existing.id === item.id))) return NextResponse.json({ error: "The assessment list changed. Refresh and try again." }, { status: 409 });
+    if (items.some(item => item.maxScore !== subject.assessments.find(existing => existing.id === item.id)?.maxScore && subject.enrollments.some(enrollment => enrollment.scores.some(score => score.assessmentId === item.id && score.points !== null)))) return NextResponse.json({ error: "Maximum points cannot change after a score has been recorded." }, { status: 409 });
+    for (const category of subject.categories) {
+      const categoryItems = items.filter(item => subject.assessments.find(existing => existing.id === item.id)?.categoryId === category.id);
+      const weighted = categoryItems.some(item => item.weight !== null);
+      if (weighted && (categoryItems.some(item => item.weight === null) || Math.abs(categoryItems.reduce((sum, item) => sum + (item.weight ?? 0), 0) - 100) > 0.01)) return NextResponse.json({ error: `Item weights in ${category.name} must either be blank for all items or total 100%.` }, { status: 400 });
+    }
+    for (const item of items) await prisma.assessment.update({ where: { id: item.id }, data: { title: item.title, maxScore: item.maxScore, weight: item.weight } });
+    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "updated assessment setup", entity: "subject", entityId: subjectId } });
     return NextResponse.json({ ok: true });
   }
   if ("gradeBands" in input) {
@@ -63,12 +105,27 @@ export async function PATCH(request: Request, context: Context) {
   }
   if ("categories" in input) {
     const parsed = categorySchema.safeParse(input); if (!parsed.success) return NextResponse.json({ error: "Invalid grading categories." }, { status: 400 });
-    const total = parsed.data.categories.reduce((sum, c) => sum + c.weight, 0);
-    if (Math.abs(total - 100) > 0.01) return NextResponse.json({ error: "Category weights must total exactly 100%." }, { status: 400 });
-    for (const category of parsed.data.categories) {
-      if (!subject.categories.some(c => c.id === category.id)) return NextResponse.json({ error: "A category does not belong to this subject." }, { status: 400 });
-      await prisma.gradeCategory.update({ where: { id: category.id }, data: { name: category.name, weight: category.weight, conversionBase: category.conversionBase } });
+    const values = parsed.data.categories;
+    if (new Set(values.map(c => c.name.toLocaleLowerCase())).size !== values.length) return NextResponse.json({ error: "Category names must be unique within a class." }, { status: 400 });
+    if (values.some(c => !subject.categories.some(existing => existing.id === c.id) || (c.parentId && !values.some(parent => parent.id === c.parentId)))) return NextResponse.json({ error: "A category or parent does not belong to this class." }, { status: 400 });
+    if (values.some(c => c.parentId && subject.assessments.some(a => a.categoryId === c.parentId))) return NextResponse.json({ error: "Move assessment items out of a category before nesting other categories under it." }, { status: 409 });
+    for (const category of values) if (category.id === category.parentId) return NextResponse.json({ error: "A category cannot be its own parent." }, { status: 400 });
+    const byId = new Map(values.map(category => [category.id, category]));
+    for (const category of values) {
+      const ancestors = new Set([category.id]); let parentId = category.parentId ?? null;
+      while (parentId) { if (ancestors.has(parentId)) return NextResponse.json({ error: "Grading categories cannot contain a cycle." }, { status: 400 }); ancestors.add(parentId); parentId = byId.get(parentId)?.parentId ?? null; }
     }
+    const parents = new Set(values.map(category => category.parentId ?? "root"));
+    for (const parentKey of parents) {
+      const siblings = values.filter(category => (category.parentId ?? "root") === parentKey);
+      const total = siblings.reduce((sum, category) => sum + category.weight, 0);
+      if (Math.abs(total - 100) > 0.01) return NextResponse.json({ error: `${parentKey === "root" ? "Top-level" : "Subcategory"} weights must total exactly 100%.` }, { status: 400 });
+    }
+    for (const category of values) {
+      const existing = subject.categories.find(c => c.id === category.id)!;
+      if ((category.parentId ?? null) !== (existing.parentId ?? null) && subject.assessments.some(a => a.categoryId === existing.id)) return NextResponse.json({ error: "Move assessments before changing a category that contains them." }, { status: 409 });
+    }
+    for (const category of values) await prisma.gradeCategory.update({ where: { id: category.id }, data: { parentId: category.parentId ?? null, name: category.name, weight: category.weight, conversionBase: category.conversionBase } });
     await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "updated grading weights", entity: "subject", entityId: subjectId } });
     return NextResponse.json({ ok: true });
   }
@@ -86,6 +143,17 @@ export async function POST(request: Request, context: Context) {
   const { subjectId } = await context.params; const subject = await ownedSubject(subjectId, teacher.id);
   if (!subject) return NextResponse.json({ error: "Subject not found" }, { status: 404 });
   const input = await request.json();
+  if ("category" in input) {
+    const parsed = newCategorySchema.safeParse(input.category); if (!parsed.success) return NextResponse.json({ error: "Provide a category name." }, { status: 400 });
+    const parentId = parsed.data.parentId || null;
+    if (parentId && !subject.categories.some(category => category.id === parentId)) return NextResponse.json({ error: "Parent category not found." }, { status: 404 });
+    if (parentId && subject.assessments.some(assessment => assessment.categoryId === parentId)) return NextResponse.json({ error: "Move assessment items out of this category before adding subcategories." }, { status: 409 });
+    const siblings = subject.categories.filter(category => (category.parentId ?? null) === parentId);
+    if (subject.categories.some(category => category.name.toLocaleLowerCase() === parsed.data.name.toLocaleLowerCase())) return NextResponse.json({ error: "A category with that name already exists in this class." }, { status: 409 });
+    const category = await prisma.gradeCategory.create({ data: { subjectId, parentId, name: parsed.data.name, weight: 0, conversionBase: 0, sortOrder: siblings.length } });
+    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "created grading category", entity: "grade-category", entityId: category.id } });
+    return NextResponse.json({ category }, { status: 201 });
+  }
   if ("students" in input) {
     const parsed = rosterSchema.safeParse(input); if (!parsed.success) return NextResponse.json({ error: "Provide one or more valid student names." }, { status: 400 });
     const created = [];
@@ -98,7 +166,11 @@ export async function POST(request: Request, context: Context) {
   }
   const parsed = assessmentSchema.safeParse(input); if (!parsed.success) return NextResponse.json({ error: "Check assessment title, category and maximum score." }, { status: 400 });
   if (!subject.categories.some(c => c.id === parsed.data.categoryId)) return NextResponse.json({ error: "Choose a category in this subject." }, { status: 400 });
-  const assessment = await prisma.assessment.create({ data: { ...parsed.data, subjectId, dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : null } });
+  const category = subject.categories.find(item => item.id === parsed.data.categoryId);
+  if (category && subject.categories.some(item => item.parentId === category.id)) return NextResponse.json({ error: "Choose a leaf category for assessment items." }, { status: 400 });
+  const existingItems = subject.assessments.filter(item => item.categoryId === parsed.data.categoryId);
+  if (existingItems.some(item => item.weight !== null) && (parsed.data.weight === undefined || parsed.data.weight === null)) return NextResponse.json({ error: "This category uses item weights. Enter a weight for this item." }, { status: 400 });
+  const assessment = await prisma.assessment.create({ data: { ...parsed.data, weight: parsed.data.weight ?? null, subjectId, dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : null } });
   await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "created assessment", entity: "assessment", entityId: assessment.id } });
   return NextResponse.json({ assessment }, { status: 201 });
 }
