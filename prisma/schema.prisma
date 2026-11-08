@@ -19,6 +19,12 @@ enum GradeStatus {
   VERIFIED
 }
 
+enum SchoolPlan {
+  FREE
+  PREMIUM
+  ENTERPRISE
+}
+
 model School {
   id                   String   @id @default(cuid())
   slug                 String   @unique
@@ -31,6 +37,7 @@ model School {
   privacyContactEmail  String?
   privacyPolicyUrl     String?
   isActive             Boolean  @default(true)
+  plan                 SchoolPlan @default(FREE)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
   users                User[]

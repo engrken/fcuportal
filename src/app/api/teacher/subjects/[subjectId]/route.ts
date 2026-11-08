@@ -1,3 +1,4 @@
+import { SCHOOL_PLAN_LIMITS } from "@/lib/plans";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
@@ -207,6 +208,10 @@ export async function POST(request: Request, context: Context) {
   }
   if ("students" in input) {
     const parsed = rosterSchema.safeParse(input); if (!parsed.success) return NextResponse.json({ error: "Provide one or more valid student names." }, { status: 400 });
+    const school = await prisma.school.findUnique({ where: { id: teacher.schoolId }, select: { plan: true } });
+    const rosterSeats = await prisma.enrollment.count({ where: { subject: { schoolId: teacher.schoolId, academicYear: subject.academicYear } } });
+    const seatLimit = SCHOOL_PLAN_LIMITS[school?.plan || "FREE"].studentSeats;
+    if (rosterSeats + parsed.data.students.length > seatLimit) return NextResponse.json({ error: `Your school plan allows ${seatLimit} student-class seats. Upgrade the school plan to add more roster entries.` }, { status: 402 });
     const created = [];
     for (const s of parsed.data.students) {
       const item = await prisma.enrollment.create({ data: { subjectId, studentName: s.studentName, studentNumber: s.studentNumber || null } });
