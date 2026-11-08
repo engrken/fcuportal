@@ -19,7 +19,7 @@ export async function POST(_request: Request, context: Context) {
     }
   });
   if (!subject) return NextResponse.json({ error: "Class not found." }, { status: 404 });
-  if (subject.gradeStatus !== "VERIFIED") return NextResponse.json({ error: "Email is available only after the registrar verifies this class as final." }, { status: 409 });
+  if (subject.gradeStatus !== "VERIFIED") return NextResponse.json({ error: "Email is available only after the teacher finalizes the class." }, { status: 409 });
 
   const smtpUser = process.env.GMAIL_SMTP_USER;
   const smtpPassword = process.env.GMAIL_SMTP_APP_PASSWORD;
@@ -76,7 +76,7 @@ export async function POST(_request: Request, context: Context) {
       `Final grade: ${equivalent.finalGrade ?? "—"}`,
       `Remarks: ${enrollment.remarks || equivalent.remarks}`,
       "",
-      "This is an independent faculty portal and is not an official FCU registrar notice."
+      "This is an informational SAGA grade notice sent by the teacher. Contact your school for official records."
     ].join("\n");
     try {
       await transporter.sendMail({ from: smtpUser, to, subject: `Verified grade: ${subject.code} · ${subject.term} ${subject.academicYear}`, text });

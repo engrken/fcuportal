@@ -10,7 +10,6 @@ datasource db {
 enum Role {
   TEACHER
   STUDENT
-  REGISTRAR
 }
 
 enum GradeStatus {
@@ -38,11 +37,31 @@ model School {
   privacyPolicyUrl     String?
   isActive             Boolean  @default(true)
   plan                 SchoolPlan @default(FREE)
+  subscriptionStatus   String   @default("ACTIVE")
+  subscriptionExpiresAt DateTime?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
   users                User[]
   subjects             Subject[]
   studentDirectory     StudentDirectory[]
+  tenantPayments       TenantPayment[]
+}
+
+model TenantPayment {
+  id          String   @id @default(cuid())
+  schoolId    String
+  amount      Float
+  currency    String   @default("PHP")
+  method      String
+  reference   String?
+  paidAt      DateTime @default(now())
+  coverageFrom DateTime?
+  coverageTo  DateTime?
+  note        String?
+  recordedBy  String
+  createdAt   DateTime @default(now())
+  school      School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  @@index([schoolId, paidAt])
 }
 
 model User {

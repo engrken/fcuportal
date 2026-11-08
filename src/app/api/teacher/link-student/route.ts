@@ -44,7 +44,7 @@ export async function DELETE(request: Request) {
   const parsed = unlinkSchema.safeParse(await request.json()); if (!parsed.success) return NextResponse.json({ error: "Choose a linked student roster record." }, { status: 400 });
   const enrollment = await prisma.enrollment.findFirst({ where: { id: parsed.data.enrollmentId, subject: { teacherId: teacher.id, schoolId: teacher.schoolId } }, include: { subject: { select: { gradeStatus: true } } } });
   if (!enrollment) return NextResponse.json({ error: "Student roster record not found." }, { status: 404 });
-  if (enrollment.subject.gradeStatus === "VERIFIED") return NextResponse.json({ error: "Finalized records are locked. Ask the registrar to recall the grade before unlinking an account." }, { status: 409 });
+  if (enrollment.subject.gradeStatus === "VERIFIED") return NextResponse.json({ error: "Finalized records are locked. Recall the grade before unlinking an account." }, { status: 409 });
   if (!enrollment.studentUserId) return NextResponse.json({ ok: true, unlinked: false });
   await prisma.$transaction([
     prisma.enrollment.update({ where: { id: enrollment.id }, data: { studentUserId: null } }),

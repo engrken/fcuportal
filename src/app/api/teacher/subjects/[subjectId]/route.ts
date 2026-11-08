@@ -34,7 +34,7 @@ export async function PATCH(request: Request, context: Context) {
   const input = await request.json();
   if ("recallGrades" in input) {
     if (input.recallGrades !== true) return NextResponse.json({ error: "Confirm recall of the submitted grades." }, { status: 400 });
-    if (subject.gradeStatus !== "SUBMITTED") return NextResponse.json({ error: "Only submitted, not-yet-verified grades can be recalled by the teacher." }, { status: 409 });
+    if (subject.gradeStatus === "DRAFT") return NextResponse.json({ error: "This class has no submitted grades to recall." }, { status: 409 });
     await prisma.$transaction([
       prisma.subject.update({ where: { id: subjectId }, data: { gradeStatus: "DRAFT", isPublished: false, submittedAt: null, verifiedAt: null } }),
       prisma.auditEvent.create({ data: { actorId: teacher.id, action: "recalled submitted grades to draft", entity: "subject", entityId: subjectId } })
@@ -42,7 +42,7 @@ export async function PATCH(request: Request, context: Context) {
     return NextResponse.json({ ok: true, gradeStatus: "DRAFT" });
   }
   if ("submitGrades" in input) {
-    if (subject.gradeStatus === "VERIFIED") return NextResponse.json({ error: "These grades have been verified and are final. Ask the registrar to reopen the record before making a correction." }, { status: 409 });
+    if (subject.gradeStatus === "VERIFIED") return NextResponse.json({ error: "These grades have already been finalized. Recall them before making a correction." }, { status: 409 });
     if (input.submitGrades !== true) return NextResponse.json({ error: "Confirm grade submission." }, { status: 400 });
     if (!subject.categories.length || !subject.assessments.length || !subject.enrollments.length) return NextResponse.json({ error: "Add grading categories, assessment items, and students before submitting grades." }, { status: 400 });
     const parents = new Set(subject.categories.map(category => category.parentId ?? "root"));
@@ -59,11 +59,11 @@ export async function PATCH(request: Request, context: Context) {
     const missingScores = subject.enrollments.filter(enrollment => !enrollment.remarks && subject.assessments.some(item => !enrollment.scores.some(score => score.assessmentId === item.id && (score.points !== null || !!score.remark)))).length;
     if (missingScores) return NextResponse.json({ error: `${missingScores} student record(s) have missing assessment scores. Enter a score or set an item status such as Excused, Absent, or Did not submit.` }, { status: 400 });
     const now = new Date();
-    await prisma.subject.update({ where: { id: subjectId }, data: { gradeStatus: "SUBMITTED", isPublished: true, submittedAt: now, verifiedAt: null } });
-    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "submitted grades for registrar verification", entity: "subject", entityId: subjectId } });
-    return NextResponse.json({ ok: true, gradeStatus: "SUBMITTED", submittedAt: now });
+    await prisma.subject.update({ where: { id: subjectId }, data: { gradeStatus: "VERIFIED", isPublished: true, submittedAt: now, verifiedAt: now } });
+    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "published final grades to students", entity: "subject", entityId: subjectId } });
+    return NextResponse.json({ ok: true, gradeStatus: "VERIFIED", submittedAt: now, verifiedAt: now });
   }
-  if (subject.gradeStatus === "VERIFIED") return NextResponse.json({ error: "This grade record has been verified and is final. Ask the registrar to reopen it before editing." }, { status: 409 });
+  if (subject.gradeStatus === "VERIFIED") return NextResponse.json({ error: "This grade record has been finalized. Recall it before making changes." }, { status: 409 });
   if ("updateEnrollment" in input) {
     const parsed = enrollmentUpdateSchema.safeParse(input); if (!parsed.success) return NextResponse.json({ error: "Enter a valid student name and number." }, { status: 400 });
     const { enrollmentId, studentName, studentNumber } = parsed.data.updateEnrollment;
@@ -193,7 +193,7 @@ export async function POST(request: Request, context: Context) {
   const teacher = await requireRole("TEACHER"); if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { subjectId } = await context.params; const subject = await ownedSubject(subjectId, teacher.id, teacher.schoolId);
   if (!subject) return NextResponse.json({ error: "Subject not found" }, { status: 404 });
-  if (subject.gradeStatus === "VERIFIED") return NextResponse.json({ error: "This grade record has been verified and is final. Ask the registrar to reopen it before editing." }, { status: 409 });
+  if (subject.gradeStatus === "VERIFIED") return NextResponse.json({ error: "This grade record has been finalized. Recall it before making changes." }, { status: 409 });
   const input = await request.json();
   if ("category" in input) {
     const parsed = newCategorySchema.safeParse(input.category); if (!parsed.success) return NextResponse.json({ error: "Provide a category name." }, { status: 400 });
