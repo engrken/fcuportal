@@ -7,7 +7,7 @@ export async function PATCH(request: Request, context: Context) {
   const registrar = await requireRole("REGISTRAR");
   if (!registrar) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { subjectId } = await context.params;
-  const subject = await prisma.subject.findUnique({ where: { id: subjectId }, include: { categories: true, assessments: true, enrollments: { include: { scores: true } } } });
+  const subject = await prisma.subject.findFirst({ where: { id: subjectId, schoolId: registrar.schoolId }, include: { categories: true, assessments: true, enrollments: { include: { scores: true } } } });
   const input = await request.json().catch(() => ({}));
   if (input.action === "recall") {
     if (!subject || !["SUBMITTED", "VERIFIED"].includes(subject.gradeStatus)) return NextResponse.json({ error: "Only submitted or verified grades can be recalled." }, { status: 409 });

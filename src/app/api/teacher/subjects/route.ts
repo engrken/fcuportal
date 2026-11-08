@@ -8,7 +8,7 @@ const schema = z.object({ code: z.string().trim().min(1).max(30), title: z.strin
 export async function GET() {
   const teacher = await requireRole("TEACHER");
   if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const subjects = await prisma.subject.findMany({ where: { teacherId: teacher.id }, orderBy: [{ academicYear: "desc" }, { code: "asc" }], include: { _count: { select: { enrollments: true } } } });
+  const subjects = await prisma.subject.findMany({ where: { teacherId: teacher.id, schoolId: teacher.schoolId }, orderBy: [{ academicYear: "desc" }, { code: "asc" }], include: { _count: { select: { enrollments: true } } } });
   return NextResponse.json({ subjects });
 }
 export async function POST(request: Request) {
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: "Complete the subject details." }, { status: 400 });
-  const subject = await prisma.subject.create({ data: { ...parsed.data, teacherId: teacher.id, gradeBands: { create: SAMPLE_GRADE_BANDS.map((band, sortOrder) => ({ ...band, sortOrder })) } } });
+  const subject = await prisma.subject.create({ data: { ...parsed.data, schoolId: teacher.schoolId, teacherId: teacher.id, gradeBands: { create: SAMPLE_GRADE_BANDS.map((band, sortOrder) => ({ ...band, sortOrder })) } } });
   await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "created", entity: "subject", entityId: subject.id } });
   return NextResponse.json({ subject }, { status: 201 });
 }

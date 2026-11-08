@@ -5,19 +5,20 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { checkAuthThrottle } from "@/lib/rate-limit";
 
-const schema = z.object({ email: z.string().trim().email().max(200) });
+const schema = z.object({ schoolId: z.string().min(1), email: z.string().trim().email().max(200) });
 export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
   const email = parsed.data.email.toLowerCase();
-  const throttle = await checkAuthThrottle(request, `password-reset:${email}`, 3);
+  const schoolId = parsed.data.schoolId;
+  const throttle = await checkAuthThrottle(request, `password-reset:${schoolId}:${email}`, 3);
   if (!throttle.allowed) return NextResponse.json({ error: "Too many reset requests. Please try again in 15 minutes." }, { status: 429 });
 
   const smtpUser = process.env.GMAIL_SMTP_USER;
   const smtpPassword = process.env.GMAIL_SMTP_APP_PASSWORD;
   if (!smtpUser || !smtpPassword) return NextResponse.json({ error: "Account recovery email is not configured yet. Please contact the portal administrator." }, { status: 503 });
 
-  const user = await prisma.user.findUnique({ where: { email }, select: { id: true, email: true } });
+  const user = await prisma.user.findFirst({ where: { schoolId, email }, select: { id: true, email: true } });
   if (user) {
     const token = randomBytes(32).toString("base64url");
     const tokenHash = createHash("sha256").update(token).digest("hex");
@@ -27,7 +28,7 @@ export async function POST(request: Request) {
     const link = `${origin}/reset-password?token=${encodeURIComponent(token)}`;
     const mailer = nodemailer.createTransport({ host: "smtp.gmail.com", port: 465, secure: true, auth: { user: smtpUser, pass: smtpPassword } });
     try {
-      await mailer.sendMail({ from: smtpUser, to: user.email, subject: "Reset your Faculty Grade Portal password", text: `A password reset was requested for your Faculty Grade Portal account.\n\nUse this link within 30 minutes to choose a new password:\n${link}\n\nIf you did not request this, you can ignore this email.` });
+      await mailer.sendMail({ from: smtpUser, to: user.email, subject: "Reset your Student Grade Portal password", text: `A password reset was requested for your Student Grade Portal account.\n\nUse this link within 30 minutes to choose a new password:\n${link}\n\nIf you did not request this, you can ignore this email.` });
     } catch (error) {
       await prisma.passwordResetToken.deleteMany({ where: { tokenHash } });
       console.error("Password recovery email failed", error);

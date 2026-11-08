@@ -19,40 +19,69 @@ enum GradeStatus {
   VERIFIED
 }
 
+model School {
+  id                   String   @id @default(cuid())
+  slug                 String   @unique
+  name                 String
+  shortName            String
+  portalTitle          String   @default("Student Grade Portal")
+  logoText             String   @default("S")
+  primaryColor         String   @default("#2457d6")
+  privacyController    String?
+  privacyContactEmail  String?
+  privacyPolicyUrl     String?
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  users                User[]
+  subjects             Subject[]
+  studentDirectory     StudentDirectory[]
+}
+
 model User {
   id            String       @id @default(cuid())
-  email         String       @unique
+  email         String
   passwordHash  String
   passwordChangedAt DateTime?
   role          Role
+  schoolId      String
   fullName      String
-  studentNumber String?      @unique
+  studentNumber String?
   courseProgram String?
   yearLevel     String?
   privacyNoticeAcceptedAt DateTime?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
+  school        School      @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   subjects      Subject[]    @relation("TeacherSubjects")
   enrollments   Enrollment[] @relation("StudentEnrollments")
   auditEvents   AuditEvent[]
   passwordResetTokens PasswordResetToken[]
+  @@unique([schoolId, email])
+  @@unique([schoolId, studentNumber])
+  @@index([schoolId, role])
 }
 
 model StudentDirectory {
-  studentNumber String   @id
+  schoolId      String
+  studentNumber String
   firstName     String
   middleName    String?
   lastName      String
   fullName      String
-  email         String   @unique
+  email         String
   courseProgram String
   yearLevel     String
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  school        School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  @@id([schoolId, studentNumber])
+  @@unique([schoolId, email])
 }
 
 model Subject {
   id           String       @id @default(cuid())
+  schoolId     String
   teacherId    String
   code         String
   title        String
@@ -66,12 +95,14 @@ model Subject {
   verifiedAt   DateTime?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
+  school       School       @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   teacher      User         @relation("TeacherSubjects", fields: [teacherId], references: [id], onDelete: Cascade)
   enrollments  Enrollment[]
   categories   GradeCategory[]
   gradeBands   GradeBand[]
   assessments  Assessment[]
-  @@index([teacherId, academicYear, term])
+  @@index([schoolId, teacherId, academicYear, term])
+  @@index([schoolId, gradeStatus, submittedAt])
 }
 
 model GradeBand {

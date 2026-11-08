@@ -1,24 +1,28 @@
 import Link from "next/link";
+import { prisma } from "@/lib/prisma";
 
-export default function PrivacyPage() {
+export default async function PrivacyPage({ searchParams }: { searchParams: Promise<{ schoolId?: string }> }) {
+  const { schoolId } = await searchParams;
+  const school = schoolId ? await prisma.school.findFirst({ where: { id: schoolId, isActive: true }, select: { name: true, privacyController: true, privacyContactEmail: true, privacyPolicyUrl: true } }) : null;
+  const schoolName = school?.name || "the school selected for this portal";
   return <main className="privacy-page"><div className="privacy-document">
-    <Link href="/" className="privacy-back">← Back to home</Link>
-    <p className="eyebrow text-primary mt-4">FACULTY GRADE PORTAL</p>
+    <Link href="/" className="privacy-back">← Back to school selection</Link>
+    <p className="eyebrow text-primary mt-4">STUDENT GRADE PORTAL</p>
     <h1>Privacy Notice</h1>
-    <p className="privacy-updated">Independent faculty tool · November 2026</p>
-    <div className="alert alert-warning small">This is a personal project operated by Engr. Kenneth Mark Bulquerin. It is not an official FCU portal and is not endorsed or administered by Filamer Christian University. Teachers should add real student records only when they are authorized to do so and have determined the appropriate purpose and lawful basis.</div>
-    <h2>Who operates this portal</h2>
-    <p>This portal is operated by <b>Engr. Kenneth Mark Bulquerin</b> as an independent faculty tool. Participating teachers manage the class records they create. FCU's <a href="https://filamer.edu.ph/about-us/data-privacy-policy/" target="_blank" rel="noreferrer">Data Privacy Policy</a> applies to FCU's own processing and is provided as a reference; this personal portal is not an FCU system.</p>
+    <p className="privacy-updated">{school ? `${school.name} workspace · November 2026` : "School workspace · November 2026"}</p>
+    <div className="alert alert-warning small">This service is independently operated. It is not an official system of any school unless the school has separately confirmed and authorized that relationship. Teachers should enter student records only for an approved educational purpose.</div>
+    <h2>Who is responsible</h2>
+    <p>This portal workspace is configured for <b>{schoolName}</b>. The data controller for a class record is <b>{school?.privacyController || schoolName}</b>. Each participating teacher is responsible for records they create and for following their school’s instructions. {school?.privacyPolicyUrl && <>Read the school’s <a href={school.privacyPolicyUrl} target="_blank" rel="noreferrer">privacy policy</a>.</>}</p>
     <h2>Purpose and information processed</h2>
-    <p>The portal supports class rosters, assessment records, grade computation, and release of results to students. Information may include name, email address, student ID, course/program, year level, class enrollment, assessment scores, calculated grades, account and security records. Quick Check compares a student's ID and directory email before showing submitted grades. Account registration also checks those details against the class directory.</p>
-    <h2>Access and sharing</h2>
-    <p>Teachers can access only subjects and class records they create. A signed-in student can see submitted results linked to their account. Quick Check provides a limited access path using the student's exact ID and email address and is rate-limited. Submitted grades are marked provisional until a separate portal registrar account verifies them. This status does not submit grades to or verify grades with FCU. The portal operator and hosting/database providers may have technical access needed to operate the service.</p>
-    <h2>Lawful basis, retention, and rights</h2>
-    <p>The teacher managing each class should identify the appropriate purpose and lawful basis and tell students how their records will be used. Records should be kept only as long as needed for the stated purpose, then securely removed. For access, correction, deletion requests where applicable, or privacy concerns, contact the portal operator. Each participating teacher should clarify their responsibilities under the Data Privacy Act of 2012 with an appropriate privacy professional or Data Protection Officer where applicable.</p>
+    <p>The portal supports class rosters, attendance, assessment records, grade computation, and release of results to students. Information may include name, email address, student ID, course/program, year level, class enrollment, attendance, assessment scores, calculated grades, account information, and security records.</p>
+    <h2>Access and school separation</h2>
+    <p>Accounts, class records, and student directories are assigned to a selected school workspace. Teachers and registrars can access records only in their school and only for their role. Students can access grades linked to their account. Quick Check requires the school, student ID, and matching email. Submitted grades remain provisional until the school workspace’s registrar verifies them.</p>
+    <h2>Retention and requests</h2>
+    <p>Records should be retained only for the period required by the school’s purpose and policy. For access, correction, deletion where applicable, or privacy concerns, contact the responsible school privacy contact or the teacher managing the class. Applicable legal obligations, including the Data Privacy Act of 2012, should be assessed by the school’s privacy professional or Data Protection Officer.</p>
     <h2>Hosting and security</h2>
-    <p>The application uses password hashing, signed HttpOnly session cookies, role checks, per-teacher data access checks, and database-backed throttling for sign-in, registration, and Quick Check attempts. Hosting and database vendors may process or store information to provide the service. No online service can guarantee zero risk.</p>
+    <p>The application uses password hashing, signed HttpOnly session cookies, role checks, school-scoped data access, and throttling for authentication and Quick Check attempts. Hosting and database providers may process or store information to operate the service. No online service can guarantee zero risk.</p>
     <h2>Contact</h2>
-    <p className="privacy-placeholder">Portal operator: Engr. Kenneth Mark Bulquerin · Contact: kennethmark.bulquerin@filamer.edu.ph</p>
-    <div className="privacy-footer">This notice describes this independent portal. It is not legal advice or a certification of compliance. Teachers remain responsible for ensuring they are authorized to enter and share the student records they manage.</div>
+    <p className="privacy-placeholder">{school?.privacyController || schoolName}{school?.privacyContactEmail ? ` · ${school.privacyContactEmail}` : " · Contact your school for privacy requests"}</p>
+    <div className="privacy-footer">This notice is a service template for the selected school workspace. Each school must review and complete its own privacy details before using real student records. It is not legal advice or a certification of compliance.</div>
   </div></main>;
 }

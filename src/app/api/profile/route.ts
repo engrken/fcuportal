@@ -7,7 +7,7 @@ export async function PATCH(request: Request) {
   const user = await getSession(); if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const parsed = schema.safeParse(await request.json()); if (!parsed.success) return NextResponse.json({ error: "Check your name and email." }, { status: 400 });
   try {
-    await prisma.user.update({ where: { id: user.id }, data: { fullName: parsed.data.fullName } });
+    await prisma.user.updateMany({ where: { id: user.id, schoolId: user.schoolId }, data: { fullName: parsed.data.fullName } });
     return NextResponse.json({ ok: true });
   } catch { return NextResponse.json({ error: "That email address is already in use." }, { status: 409 }); }
 }
