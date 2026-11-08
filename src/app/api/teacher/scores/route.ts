@@ -7,8 +7,8 @@ export async function PUT(request: Request) {
   const teacher = await requireRole("TEACHER"); if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const parsed = schema.safeParse(await request.json()); if (!parsed.success) return NextResponse.json({ error: "Invalid score." }, { status: 400 });
   const [enrollment, assessment] = await Promise.all([
-    prisma.enrollment.findFirst({ where: { id: parsed.data.enrollmentId, subject: { teacherId: teacher.id } }, include: { subject: { select: { gradeStatus: true } } } }),
-    prisma.assessment.findFirst({ where: { id: parsed.data.assessmentId, subject: { teacherId: teacher.id } } })
+    prisma.enrollment.findFirst({ where: { id: parsed.data.enrollmentId, subject: { teacherId: teacher.id, schoolId: teacher.schoolId } }, include: { subject: { select: { gradeStatus: true } } } }),
+    prisma.assessment.findFirst({ where: { id: parsed.data.assessmentId, subject: { teacherId: teacher.id, schoolId: teacher.schoolId } } })
   ]);
   if (!enrollment || !assessment || enrollment.subjectId !== assessment.subjectId) return NextResponse.json({ error: "Record not found." }, { status: 404 });
   if (enrollment.subject.gradeStatus === "VERIFIED") return NextResponse.json({ error: "This grade record is final. Ask the registrar to reopen it before changing scores." }, { status: 409 });
