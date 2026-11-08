@@ -11,7 +11,7 @@ export async function POST(_request: Request, context: Context) {
   if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { subjectId } = await context.params;
   const subject = await prisma.subject.findFirst({
-    where: { id: subjectId, teacherId: teacher.id },
+    where: { id: subjectId, teacherId: teacher.id, schoolId: teacher.schoolId },
     include: {
       categories: { orderBy: { sortOrder: "asc" }, include: { assessments: { include: { scores: true } } } },
       gradeBands: true,
@@ -26,7 +26,7 @@ export async function POST(_request: Request, context: Context) {
   if (!smtpUser || !smtpPassword) return NextResponse.json({ error: "Gmail SMTP is not configured yet. Add GMAIL_SMTP_USER and GMAIL_SMTP_APP_PASSWORD in the Vercel production environment." }, { status: 503 });
 
   const ids = subject.enrollments.map(enrollment => enrollment.studentNumber).filter((value): value is string => !!value);
-  const directory = await prisma.studentDirectory.findMany({ where: { studentNumber: { in: ids } }, select: { studentNumber: true, email: true } });
+  const directory = await prisma.studentDirectory.findMany({ where: { schoolId: teacher.schoolId, studentNumber: { in: ids } }, select: { studentNumber: true, email: true } });
   const emailById = new Map(directory.map(student => [student.studentNumber, student.email]));
   const transporter = nodemailer.createTransport({ host: "smtp.gmail.com", port: 465, secure: true, auth: { user: smtpUser, pass: smtpPassword } });
   let sent = 0;
