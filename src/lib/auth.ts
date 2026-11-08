@@ -9,8 +9,8 @@ function key() {
   return new TextEncoder().encode(secret);
 }
 
-export async function createSession(user: { id: string; role: string }) {
-  const token = await new SignJWT({ role: user.role }).setProtectedHeader({ alg: "HS256" })
+export async function createSession(user: { id: string; role: string; schoolId: string }) {
+  const token = await new SignJWT({ role: user.role, schoolId: user.schoolId }).setProtectedHeader({ alg: "HS256" })
     .setSubject(user.id).setIssuedAt().setExpirationTime("7d").sign(key());
   (await cookies()).set(COOKIE, token, {
     httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax",
@@ -28,7 +28,7 @@ export async function getSession() {
   try {
     const { payload } = await jwtVerify(token, key());
     if (!payload.sub) return null;
-    const user = await prisma.user.findUnique({ where: { id: payload.sub }, select: { id: true, role: true, fullName: true, email: true, studentNumber: true, courseProgram: true, yearLevel: true, passwordChangedAt: true } });
+    const user = await prisma.user.findUnique({ where: { id: payload.sub }, select: { id: true, role: true, schoolId: true, fullName: true, email: true, studentNumber: true, courseProgram: true, yearLevel: true, passwordChangedAt: true, school: { select: { id: true, slug: true, name: true, shortName: true, portalTitle: true, logoText: true, primaryColor: true, privacyController: true, privacyContactEmail: true, privacyPolicyUrl: true } } } });
     if (user?.passwordChangedAt && (!payload.iat || user.passwordChangedAt.getTime() >= payload.iat * 1000)) return null;
     if (!user) return null;
     const { passwordChangedAt: _passwordChangedAt, ...sessionUser } = user;
