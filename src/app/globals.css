@@ -117,8 +117,11 @@
 .score-sheet tbody tr:nth-child(even) td{background:#fbfcfe}
 .score-sheet tbody tr:nth-child(even) .score-sheet-student{background:#f3f6fb}
 .score-sheet-score{text-align:center;vertical-align:middle}
+.score-sheet-entry{display:grid;grid-template-columns:minmax(0,1fr) 38px;align-items:center;gap:4px;min-width:0}
 .score-sheet-input,.score-sheet-status,.score-sheet-remark-select{display:block;width:100%;max-width:100%;min-width:0;height:27px;border:1px solid #d8e0eb;border-radius:4px;background:#fff;text-align:center;color:#243750;font-size:.66rem;font-weight:600;line-height:1.1;padding:2px}
-.score-sheet-status{height:21px;margin-top:3px;appearance:none;font-size:.52rem;color:#66758c}
+.score-sheet-input{-moz-appearance:textfield}
+.score-sheet-input::-webkit-inner-spin-button,.score-sheet-input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.score-sheet-status{height:27px;appearance:none;font-size:.52rem;color:#66758c;padding:2px 1px}
 .score-sheet-remark-select{font-size:.56rem}
 .score-sheet-total{text-align:center;font-size:.64rem;font-weight:700;color:#2d559a;overflow-wrap:anywhere}
 .score-sheet-remark{text-align:center}
