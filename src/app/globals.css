@@ -97,3 +97,31 @@
 .scorebook-section{width:100%;max-width:100%;min-width:0;overflow-x:clip}
 .scorebook-student-list,.score-student-card,.score-category-card{min-width:0;max-width:100%}
 @media(max-width:760px){.sidebar-collapsed .sidebar{display:flex;width:100%;height:54px;min-height:54px;padding:8px 12px;flex-direction:row;justify-content:flex-end;border-right:0;border-bottom:1px solid var(--line)}.sidebar-collapsed .sidebar-pin-toggle{position:static;align-self:center;width:auto;min-height:36px;padding:6px 10px;margin:0}.sidebar-collapsed .sidebar-brand,.sidebar-collapsed .side-link,.sidebar-collapsed .sidebar-label,.sidebar-collapsed .sidebar-bottom{display:none}.sidebar-collapsed .main-area{margin-left:0}}
+
+/* Workbook style score entry that uses the available page width without a horizontal scroller. */
+.score-sheet-wrap{width:100%;max-width:100%;overflow:hidden;border:1px solid #dbe2ec;border-radius:8px;margin:4px 0 12px}
+.score-sheet{width:100%;min-width:0;table-layout:fixed;border-collapse:collapse;font-size:.68rem;color:#26364f}
+.score-sheet th,.score-sheet td{min-width:0;padding:6px 5px;border-right:1px solid #e2e7ef;border-bottom:1px solid #e2e7ef;overflow:hidden}
+.score-sheet thead th{text-align:center;vertical-align:middle;white-space:normal;overflow-wrap:anywhere;line-height:1.2}
+.score-sheet-category{background:#eaf0fb;color:#24467f;font-size:.64rem;font-weight:800}
+.score-sheet-category small,.score-sheet-assessment small{display:block;margin-top:3px;color:#6f7e94;font-size:.53rem;font-weight:600;line-height:1.15}
+.score-sheet-assessment{height:54px;background:#f5f7fb;font-size:.58rem;font-weight:750;overflow-wrap:anywhere}
+.score-sheet-assessment span{display:block;max-height:2.5em;overflow:hidden}
+.score-sheet-summary-head{background:#eef3fb;color:#52637e;font-size:.55rem;letter-spacing:.025em}
+.score-sheet-student{background:#f8fafc;text-align:left!important}
+.score-sheet-student b,.score-sheet-student small{display:block;overflow-wrap:anywhere}
+.score-sheet-student b{font-size:.65rem;color:#1e2f4a}
+.score-sheet-student small{margin-top:2px;font-size:.56rem;font-weight:500;color:#8290a4}
+.score-sheet-linked{color:#37835c!important}
+.score-sheet-link{border:0;background:none;padding:2px 0;color:#315fc0;font-size:.56rem;font-weight:700;text-align:left}
+.score-sheet tbody tr:nth-child(even) td{background:#fbfcfe}
+.score-sheet tbody tr:nth-child(even) .score-sheet-student{background:#f3f6fb}
+.score-sheet-score{text-align:center;vertical-align:middle}
+.score-sheet-input,.score-sheet-status,.score-sheet-remark-select{display:block;width:100%;max-width:100%;min-width:0;height:27px;border:1px solid #d8e0eb;border-radius:4px;background:#fff;text-align:center;color:#243750;font-size:.66rem;font-weight:600;line-height:1.1;padding:2px}
+.score-sheet-status{height:21px;margin-top:3px;appearance:none;font-size:.52rem;color:#66758c}
+.score-sheet-remark-select{font-size:.56rem}
+.score-sheet-total{text-align:center;font-size:.64rem;font-weight:700;color:#2d559a;overflow-wrap:anywhere}
+.score-sheet-remark{text-align:center}
+.score-sheet-legend{display:flex;flex-wrap:wrap;gap:7px 16px;padding:8px 2px 0;color:#78869a;font-size:.63rem}
+.score-sheet-legend b{color:#435774}
+@media(max-width:760px){.score-sheet{font-size:.59rem}.score-sheet th,.score-sheet td{padding:4px 2px}.score-sheet-student b{font-size:.57rem}.score-sheet-student small{font-size:.5rem}.score-sheet-input{height:25px;font-size:.58rem}.score-sheet-status{height:20px;font-size:.48rem}.score-sheet-remark-select{font-size:.49rem}.score-sheet-summary-head{font-size:.48rem}.score-sheet-assessment{font-size:.51rem}}
