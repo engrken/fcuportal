@@ -7,7 +7,7 @@ export async function GET() {
   const student = await requireRole("STUDENT");
   if (!student) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const enrollments = await prisma.enrollment.findMany({
-    where: { studentUserId: student.id, subject: { gradeStatus: { in: ["SUBMITTED", "VERIFIED"] } } },
+    where: { studentUserId: student.id, subject: { schoolId: student.schoolId, gradeStatus: { in: ["SUBMITTED", "VERIFIED"] } } },
     include: {
       subject: {
         include: {
