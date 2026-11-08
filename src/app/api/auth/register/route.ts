@@ -50,9 +50,9 @@ export async function POST(request: Request) {
     const user = await prisma.$transaction(async tx => {
       let school: School | null = null;
       if (role === "TEACHER") {
-        school = await tx.school.findFirst({ where: { name: { equals: schoolName!.trim(), mode: "insensitive" }, isActive: true } });
+        const normalizedSchoolName = schoolName!.trim().replace(/\s+/g, " ");
+        school = await tx.school.findFirst({ where: { name: { equals: normalizedSchoolName, mode: "insensitive" }, isActive: true } });
         if (!school) {
-          const normalizedSchoolName = schoolName!.trim().replace(/\s+/g, " ");
           const identity = schoolIdentity(normalizedSchoolName);
           school = await tx.school.create({ data: { name: normalizedSchoolName, ...identity, portalTitle: "SAGA Portal" } });
         }
