@@ -6,7 +6,7 @@ export async function GET() {
   const registrar = await requireRole("REGISTRAR");
   if (!registrar) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const subjects = await prisma.subject.findMany({
-    where: { gradeStatus: { in: ["SUBMITTED", "VERIFIED"] } },
+    where: { schoolId: registrar.schoolId, gradeStatus: { in: ["SUBMITTED", "VERIFIED"] } },
     include: { teacher: { select: { fullName: true, email: true } }, _count: { select: { enrollments: true, assessments: true } } },
     orderBy: [{ gradeStatus: "asc" }, { submittedAt: "asc" }]
   });
