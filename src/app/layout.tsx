@@ -3,8 +3,8 @@ import "./globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "FCU Student Portal",
-  description: "A private academic portal for teachers and students."
+  title: "Faculty Grade Portal",
+  description: "An independently operated grade portal for faculty and their students."
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

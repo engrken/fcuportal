@@ -1,6 +1,6 @@
-# FCU Student Portal
+# Faculty Grade Portal
 
-A multi-teacher academic portal built with Next.js, Bootstrap, PostgreSQL/Neon, and Prisma. It starts from the grade-sheet structure in the supplied samples: subject code/title, term and academic year, class roster, weighted assessment categories, total percentage, final-grade equivalent, and remarks.
+An independently operated faculty tool for managing class grades, built with Next.js, Bootstrap, PostgreSQL/Neon, and Prisma. It is intended for personal use and may be shared with fellow faculty by invitation. It is not an official Filamer Christian University (FCU) portal and is not endorsed or administered by FCU. Each teacher can access only subjects they own. It starts from the grade-sheet structure in the supplied samples: subject code/title, term and academic year, class roster, weighted assessment categories, total percentage, final-grade equivalent, and remarks.
 
 ## Current features
 
@@ -12,7 +12,7 @@ A multi-teacher academic portal built with Next.js, Bootstrap, PostgreSQL/Neon, 
 - Profile name editing, hashed passwords, signed HttpOnly sessions, secure production cookies, request validation, database-backed auth throttling, and grade-change audit events for key teacher actions.
 - Responsive Bootstrap UI for desktop and mobile.
 
-This is an application foundation, not a statement of institutional approval or legal compliance. The supplied workbooks are not included in this repository. They contain personal academic information and must be handled under FCU’s approved privacy, retention, and access procedures.
+This is an independent personal project, not an FCU service, and its existence does not establish FCU approval for using it with school records. The supplied workbooks are not included in this repository. They contain personal academic information and must be handled securely. Before entering real student data, the portal owner and each participating teacher should establish their respective responsibilities, lawful basis, notice, retention, access, and incident procedures under the Data Privacy Act of 2012. Obtain guidance from the appropriate privacy professional or Data Protection Officer where applicable.
 
 ## Local setup
 
@@ -28,7 +28,7 @@ The grade scale and default weights are examples based on the supplied grade she
 
 ## Deploying on Vercel + Neon
 
-1. Connect this repository to a Vercel project and provision a Neon PostgreSQL database in the closest supported region to FCU users.
+1. Connect this repository to a Vercel project and provision a Neon PostgreSQL database in a region suitable for the intended users and applicable privacy obligations.
 2. Add `DATABASE_URL` (pooled runtime URL), `DIRECT_URL` (direct migration URL), `AUTH_SECRET`, and `TEACHER_INVITE_CODE` to Vercel’s environment variables. Use separate random secrets for production and preview deployments.
 3. Run the Prisma schema setup against the intended database before opening the app to users. Do not point a local or preview deployment at the production student database.
 4. Deploy and confirm database connection, account creation, student/teacher access separation, roster linking, score calculations, and publication behavior with synthetic records before importing real data.
@@ -36,13 +36,13 @@ The grade scale and default weights are examples based on the supplied grade she
 
 ## Before real student records are used
 
-- Have FCU’s Data Protection Officer review the privacy notice, lawful basis, access policy, retention period, hosting/data-processing terms, and breach procedure. The `/privacy` page is a template with institution-specific placeholders.
-- Add institutional email verification and an approved password-reset process. Student accounts are intentionally not linked to grades until a teacher verifies and links the account to a roster entry.
+- Complete the `/privacy` notice with the portal operator’s verified contact details, purposes, lawful basis, retention period, hosting/data-processing terms, and rights-request process. Consult the applicable Data Protection Officer or privacy professional. Do not imply FCU endorsement or approval.
+- Add email verification and a secure password-reset process. Student accounts are intentionally not linked to grades until a teacher verifies and links the account to a roster entry.
 - Set up a controlled process for issuing and rotating the teacher invitation code.
-- Confirm approval for Vercel and Neon as processors and the selected hosting/database regions. Use least-privilege access and restrict production database credentials.
+- Review Vercel and Neon processing terms and the selected hosting/database regions; determine who is responsible for records when other faculty use the portal. Use least-privilege access and restrict production database credentials.
 - Migrate legacy workbooks only through an approved, secure process. Do not commit workbooks, class lists, student numbers, grades, credentials, or database dumps to GitHub.
 - Run a security and accessibility review, and check the exact grading rules against each course’s approved syllabus before publication.
 
 ## Notes on data migration
 
-The legacy HTML page performs a local name search inside an uploaded workbook; it is not a multi-user database. This portal does not import the supplied workbooks automatically. Teachers can paste roster rows into a class using `Full Name<TAB>Student Number` lines. Assessment definitions and marks should be entered or migrated only after the institution approves the handling process and the conversion is reconciled against the source grade sheets.
+The legacy HTML page performs a local name search inside an uploaded workbook; it is not a multi-user database. The new portal is an independent faculty tool, not an official FCU website. This portal does not import the supplied workbooks automatically. Teachers can paste roster rows into a class using `Full Name<TAB>Student Number` lines. Assessment definitions and marks should be entered or migrated only after the responsible person approves the handling process and the conversion is reconciled against the source grade sheets.

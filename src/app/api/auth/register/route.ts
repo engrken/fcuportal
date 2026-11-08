@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     const throttle = await checkAuthThrottle(request, `register:${email}`, 4);
     if (!throttle.allowed) return NextResponse.json({ error: "Too many account creation attempts. Try again in 15 minutes." }, { status: 429 });
     if (role === "TEACHER" && (!process.env.TEACHER_INVITE_CODE || inviteCode !== process.env.TEACHER_INVITE_CODE)) {
-      return NextResponse.json({ error: "Teacher registration requires an invitation code from the portal administrator." }, { status: 403 });
+      return NextResponse.json({ error: "Teacher registration requires an invitation code from the portal owner." }, { status: 403 });
     }
     if (role === "STUDENT" && !studentNumber) return NextResponse.json({ error: "Student number is required." }, { status: 400 });
     const passwordHash = await bcrypt.hash(password, 12);
