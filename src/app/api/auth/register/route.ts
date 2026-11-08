@@ -48,7 +48,7 @@ export async function POST(request: Request) {
 
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await prisma.$transaction(async tx => {
-      let school: School;
+      let school: School | null = null;
       if (role === "TEACHER") {
         school = await tx.school.findFirst({ where: { name: { equals: schoolName!.trim(), mode: "insensitive" }, isActive: true } });
         if (!school) {
@@ -56,6 +56,7 @@ export async function POST(request: Request) {
           const identity = schoolIdentity(normalizedSchoolName);
           school = await tx.school.create({ data: { name: normalizedSchoolName, ...identity, portalTitle: "SAGA Portal" } });
         }
+        if (!school) throw new Error("SCHOOL_NOT_READY");
         const teacherCount = await tx.user.count({ where: { schoolId: school.id, role: "TEACHER" } });
         const limits = SCHOOL_PLAN_LIMITS[school.plan];
         if (teacherCount >= limits.teachers) throw new Error(`PLAN_LIMIT_TEACHERS:${limits.teachers}`);
@@ -63,6 +64,7 @@ export async function POST(request: Request) {
         school = await tx.school.findFirst({ where: { id: schoolId!, isActive: true, users: { some: { role: "TEACHER" } } } });
         if (!school) throw new Error("SCHOOL_NOT_READY");
       }
+      if (!school) throw new Error("SCHOOL_NOT_READY");
       const created = await tx.user.create({ data: { schoolId: school.id, fullName: studentProfile?.fullName ?? fullName!, email: normalizedEmail, passwordHash, role, studentNumber: role === "STUDENT" ? studentProfile?.studentNumber : null, courseProgram: studentProfile?.courseProgram ?? null, yearLevel: studentProfile?.yearLevel ?? null, privacyNoticeAcceptedAt: new Date() }, select: { id: true, role: true, schoolId: true } });
       if (studentProfile) await tx.enrollment.updateMany({ where: { studentNumber: studentProfile.studentNumber, studentUserId: null, subject: { schoolId: school.id } }, data: { studentUserId: created.id } });
       return created;
