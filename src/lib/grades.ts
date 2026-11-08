@@ -16,20 +16,47 @@ export const SAMPLE_GRADE_BANDS = [
   { minPercent: 75, finalGrade: "3.00", remarks: "Passed" }, { minPercent: 0, finalGrade: "5.00", remarks: "Failed" }
 ];
 
-export function calculateFinal(categories: Array<{ weight: number; conversionBase?: number; assessments: Array<{ maxScore: number; scores: Array<{ points: number | null }> }> }>) {
-  let weightedTotal = 0;
-  let availableWeight = 0;
+export type GradeCalculationCategory = {
+  id: string;
+  parentId?: string | null;
+  weight: number;
+  conversionBase?: number;
+  assessments: Array<{ maxScore: number; weight?: number | null; scores: Array<{ points: number | null }> }>;
+};
+
+export function calculateFinal(categories: GradeCalculationCategory[]) {
+  if (!categories.some(category => category.assessments.length > 0 && category.assessments.some(assessment => assessment.scores.some(score => score.points !== null)))) return null;
+  const childrenByParent = new Map<string | null, GradeCalculationCategory[]>();
   for (const category of categories) {
-    const assessed = category.assessments.filter(a => a.maxScore > 0 && a.scores.some(s => s.points !== null));
-    if (!assessed.length) continue;
-    const possible = assessed.reduce((sum, a) => sum + a.maxScore, 0);
-    const earned = assessed.reduce((sum, a) => sum + (a.scores[0]?.points ?? 0), 0);
-    const base = category.conversionBase ?? 0;
-    const convertedPercent = base + (earned / possible) * (100 - base);
-    weightedTotal += convertedPercent * category.weight / 100;
-    availableWeight += category.weight;
+    const parentId = category.parentId ?? null;
+    const siblings = childrenByParent.get(parentId) ?? [];
+    siblings.push(category);
+    childrenByParent.set(parentId, siblings);
   }
-  return availableWeight ? Math.round((weightedTotal / (availableWeight / 100)) * 100) / 100 : null;
+
+  const calculateCategory = (category: GradeCalculationCategory, path = new Set<string>()): number | null => {
+    if (path.has(category.id)) return null;
+    const nextPath = new Set(path).add(category.id);
+    const children = childrenByParent.get(category.id) ?? [];
+    if (children.length) {
+      return children.reduce((sum, child) => sum + (calculateCategory(child, nextPath) ?? 0) * child.weight / 100, 0);
+    }
+    if (!category.assessments.length) return 0;
+    const base = category.conversionBase ?? 0;
+    if (category.assessments.some(assessment => assessment.weight !== null && assessment.weight !== undefined)) {
+      return category.assessments.reduce((sum, assessment) => {
+        const points = assessment.scores.find(score => score.points !== null)?.points ?? 0;
+        const percent = base + (points / assessment.maxScore) * (100 - base);
+        return sum + percent * (assessment.weight ?? 0) / 100;
+      }, 0);
+    }
+    const possible = category.assessments.reduce((sum, assessment) => sum + assessment.maxScore, 0);
+    const earned = category.assessments.reduce((sum, assessment) => sum + (assessment.scores.find(score => score.points !== null)?.points ?? 0), 0);
+    return possible ? base + (earned / possible) * (100 - base) : 0;
+  };
+
+  const result = (childrenByParent.get(null) ?? []).reduce((sum, category) => sum + (calculateCategory(category) ?? 0) * category.weight / 100, 0);
+  return Math.round(result * 100) / 100;
 }
 
 export function defaultEquivalent(percent: number | null) {
