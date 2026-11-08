@@ -34,11 +34,11 @@ export default function RegisterPage() {
         body: JSON.stringify({
           schoolId: role === "STUDENT" ? schoolId : undefined,
           schoolName: role === "TEACHER" ? schoolName : undefined,
-          fullName: form.get("fullName"),
+          fullName: form.get("fullName") || undefined,
           email: form.get("email"),
           password: form.get("password"),
-          studentNumber: form.get("studentNumber"),
-          inviteCode: form.get("inviteCode"),
+          studentNumber: form.get("studentNumber") || undefined,
+          inviteCode: form.get("inviteCode") || undefined,
           role,
           acknowledgedPrivacyNotice: form.get("privacyNotice") === "on"
         })
