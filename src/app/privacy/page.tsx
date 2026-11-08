@@ -1,24 +1,21 @@
 import Link from "next/link";
 
+const fcuPrivacyPolicy = "https://filamer.edu.ph/about-us/data-privacy-policy/";
+
 export default function PrivacyPage() {
   return <main className="privacy-page"><div className="privacy-document">
     <Link href="/login" className="privacy-back">← Back to sign in</Link>
     <p className="eyebrow text-primary mt-4">FACULTY GRADE PORTAL</p>
-    <h1>Privacy Notice</h1>
-    <p className="privacy-updated">Independent faculty tool · Updated November 2026</p>
-    <div className="alert alert-warning small">This portal is a personal, independently operated project. It is not an official FCU portal and is not endorsed or administered by FCU. Before adding more real student records or inviting students to register, the portal operator and each participating teacher should determine and document their responsibilities and complete the remaining notice details.</div>
-    <h2>Who operates this portal</h2>
-    <p>This portal is operated by <b>Engr. Kenneth Mark Bulquerin of Filamer Christian University</b> as a personal, independent faculty tool. Teachers who use it manage the subjects and class records they create. FCU does not operate, endorse, or administer this portal.</p>
-    <h2>Purpose and information processed</h2>
-    <p>The portal supports class rosters, assessment records, grade computation, and private release of results to students linked to a class record. Information may include account name, email address, role, student number, course/program, year level, class enrollment, assessment scores, calculated grades, publication status, and security/audit records. Student directory details are used to match registration and class records. Do not enter sensitive information that is not needed for these purposes.</p>
-    <h2>Access and sharing</h2>
-    <p>Teachers can access only subjects and class records they create. A student can access only published results linked to that student’s account. The portal operator and hosting/database providers may have technical access needed to operate, secure, back up, or support the service. Do not assume records are shared with or managed by FCU. Do not enter another teacher’s or institution’s student records without an agreed, authorized process.</p>
-    <h2>Lawful basis, retention, and rights</h2>
-    <p><b>[Complete before use:]</b> State the applicable lawful basis and purposes; retention and deletion schedule; how people can request access, correction, deletion where applicable, or raise a concern; and how requests will be handled. The portal owner and each participating teacher should clarify their roles under the Data Privacy Act of 2012 with an appropriate privacy professional or Data Protection Officer where applicable.</p>
-    <h2>Hosting and security</h2>
-    <p>The application uses password hashing, signed HttpOnly session cookies, role checks, per-teacher data access checks, and database-backed throttling for sign-in and registration attempts. Hosting and database vendors may process or store information to provide the service. Review their terms, data locations, backups, retention, access controls, and incident-response arrangements before using real records.</p>
-    <h2>Contact</h2>
-    <p className="privacy-placeholder">Portal operator: Engr. Kenneth Mark Bulquerin, Filamer Christian University · Privacy contact: kennethmark.bulquerin@filamer.edu.ph · Retention period: [period] · Hosting/data location: [details]</p>
-    <div className="privacy-footer">This notice is a template, not legal advice or a certification of compliance. Do not use it until the placeholders are completed and the responsibilities for records are clear.</div>
+    <h1>Privacy</h1>
+    <p className="privacy-updated">A personal, independent faculty tool</p>
+    <p>This portal is operated by <b>Engr. Kenneth Mark Bulquerin of Filamer Christian University</b>. It is a personal project, not an official FCU service, and is not operated or endorsed by the University.</p>
+    <h2>How this portal uses information</h2>
+    <p>The portal stores student names, student numbers, email addresses, course and year details, class enrollment, assessments, and grades to manage rosters and share published results with linked students. Teachers can access records for classes they manage; students can see only their own published results. Vercel and Neon provide the portal’s hosting and database services.</p>
+    <h2>FCU Data Privacy Policy</h2>
+    <p>FCU’s published policy describes the University’s privacy practices. This portal is independently operated; the policy is linked here as a reference.</p>
+    <p><a className="btn btn-outline-primary btn-sm" href={fcuPrivacyPolicy} target="_blank" rel="noreferrer">Read FCU’s Data Privacy Policy ↗</a></p>
+    <h2>Questions or privacy requests</h2>
+    <p>For questions or requests about information in this portal, contact Engr. Bulquerin at <a href="mailto:kennethmark.bulquerin@filamer.edu.ph">kennethmark.bulquerin@filamer.edu.ph</a>.</p>
+    <div className="privacy-footer">Do not add student information to this portal unless you are authorized to manage the relevant class records.</div>
   </div></main>;
 }
