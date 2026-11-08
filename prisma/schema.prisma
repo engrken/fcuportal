@@ -1,0 +1,131 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  TEACHER
+  STUDENT
+}
+
+model User {
+  id            String       @id @default(cuid())
+  email         String       @unique
+  passwordHash  String
+  role          Role
+  fullName      String
+  studentNumber String?      @unique
+  privacyNoticeAcceptedAt DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  subjects      Subject[]    @relation("TeacherSubjects")
+  enrollments   Enrollment[] @relation("StudentEnrollments")
+  auditEvents   AuditEvent[]
+}
+
+model Subject {
+  id           String       @id @default(cuid())
+  teacherId    String
+  code         String
+  title        String
+  term         String
+  academicYear String
+  schedule     String?
+  courseYear   String?
+  isPublished  Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  teacher      User         @relation("TeacherSubjects", fields: [teacherId], references: [id], onDelete: Cascade)
+  enrollments  Enrollment[]
+  categories   GradeCategory[]
+  gradeBands   GradeBand[]
+  assessments  Assessment[]
+  @@index([teacherId, academicYear, term])
+}
+
+model GradeBand {
+  id          String  @id @default(cuid())
+  subjectId   String
+  minPercent  Float
+  finalGrade  String
+  remarks     String
+  sortOrder   Int     @default(0)
+  subject     Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  @@unique([subjectId, finalGrade])
+  @@index([subjectId, minPercent])
+}
+
+model Enrollment {
+  id            String       @id @default(cuid())
+  subjectId     String
+  studentUserId String?
+  studentName   String
+  studentNumber String?
+  createdAt     DateTime     @default(now())
+  subject       Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  student       User?        @relation("StudentEnrollments", fields: [studentUserId], references: [id], onDelete: SetNull)
+  scores        Score[]
+  @@unique([subjectId, studentNumber])
+  @@index([subjectId, studentName])
+  @@index([studentUserId])
+}
+
+model GradeCategory {
+  id          String      @id @default(cuid())
+  subjectId   String
+  name        String
+  weight      Float
+  conversionBase Float    @default(0)
+  sortOrder   Int         @default(0)
+  subject     Subject     @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  assessments Assessment[]
+  @@unique([subjectId, name])
+}
+
+model Assessment {
+  id         String        @id @default(cuid())
+  subjectId  String
+  categoryId String
+  title      String
+  maxScore   Float
+  dueDate    DateTime?
+  createdAt  DateTime      @default(now())
+  subject    Subject       @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  category   GradeCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  scores     Score[]
+  @@index([subjectId, categoryId])
+}
+
+model Score {
+  id           String     @id @default(cuid())
+  enrollmentId String
+  assessmentId String
+  points       Float?
+  updatedAt    DateTime   @updatedAt
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  assessment  Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  @@unique([enrollmentId, assessmentId])
+}
+
+model AuditEvent {
+  id        String   @id @default(cuid())
+  actorId   String
+  action    String
+  entity    String
+  entityId  String
+  createdAt DateTime @default(now())
+  actor     User     @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  @@index([actorId, createdAt])
+}
+
+model AuthThrottle {
+  key       String   @id
+  attempts  Int      @default(0)
+  resetAt   DateTime
+  updatedAt DateTime @updatedAt
+  @@index([resetAt])
+}
