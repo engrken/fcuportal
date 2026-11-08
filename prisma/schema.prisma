@@ -32,6 +32,7 @@ model School {
   portalTitle          String   @default("Student Grade Portal")
   logoText             String   @default("S")
   primaryColor         String   @default("#2457d6")
+  logoPath             String?
   privacyController    String?
   privacyContactEmail  String?
   privacyPolicyUrl     String?
@@ -72,6 +73,7 @@ model User {
   role          Role
   schoolId      String
   fullName      String
+  profileImagePath String?
   studentNumber String?
   courseProgram String?
   yearLevel     String?
@@ -110,6 +112,7 @@ model Subject {
   schoolId     String
   teacherId    String
   code         String
+  classId      String?
   title        String
   term         String
   academicYear String
@@ -129,6 +132,7 @@ model Subject {
   assessments  Assessment[]
   @@index([schoolId, teacherId, academicYear, term])
   @@index([schoolId, gradeStatus, submittedAt])
+  @@unique([schoolId, classId])
 }
 
 model GradeBand {
