@@ -5,10 +5,10 @@ export default function PrivacyPage() {
     <Link href="/login" className="privacy-back">← Back to sign in</Link>
     <p className="eyebrow text-primary mt-4">FACULTY GRADE PORTAL</p>
     <h1>Privacy Notice</h1>
-    <p className="privacy-updated">Independent faculty tool · Notice template · November 2026</p>
-    <div className="alert alert-warning small">This portal is a personal, independently operated project. It is not an official FCU portal and is not endorsed or administered by FCU. Before adding real student records, the portal operator and each participating teacher should determine and document their responsibilities and complete this notice with accurate details.</div>
+    <p className="privacy-updated">Independent faculty tool · Updated November 2026</p>
+    <div className="alert alert-warning small">This portal is a personal, independently operated project. It is not an official FCU portal and is not endorsed or administered by FCU. Before adding more real student records or inviting students to register, the portal operator and each participating teacher should determine and document their responsibilities and complete the remaining notice details.</div>
     <h2>Who operates this portal</h2>
-    <p>This portal is operated by <b>[portal owner name and contact email]</b> as an independent faculty tool. Teachers who use it manage the subjects and class records they create. Use of the portal does not, by itself, mean that an educational institution has approved it.</p>
+    <p>This portal is operated by <b>Engr. Kenneth Mark Bulquerin of Filamer Christian University</b> as a personal, independent faculty tool. Teachers who use it manage the subjects and class records they create. FCU does not operate, endorse, or administer this portal.</p>
     <h2>Purpose and information processed</h2>
     <p>The portal supports class rosters, assessment records, grade computation, and private release of results to students linked to a class record. Information may include account name, email address, role, student number, course/program, year level, class enrollment, assessment scores, calculated grades, publication status, and security/audit records. Student directory details are used to match registration and class records. Do not enter sensitive information that is not needed for these purposes.</p>
     <h2>Access and sharing</h2>
@@ -18,7 +18,7 @@ export default function PrivacyPage() {
     <h2>Hosting and security</h2>
     <p>The application uses password hashing, signed HttpOnly session cookies, role checks, per-teacher data access checks, and database-backed throttling for sign-in and registration attempts. Hosting and database vendors may process or store information to provide the service. Review their terms, data locations, backups, retention, access controls, and incident-response arrangements before using real records.</p>
     <h2>Contact</h2>
-    <p className="privacy-placeholder">Portal operator: [name] · Contact: [privacy email] · Retention period: [period] · Hosting/data location: [details]</p>
+    <p className="privacy-placeholder">Portal operator: Engr. Kenneth Mark Bulquerin, Filamer Christian University · Privacy contact: kennethmark.bulquerin@filamer.edu.ph · Retention period: [period] · Hosting/data location: [details]</p>
     <div className="privacy-footer">This notice is a template, not legal advice or a certification of compliance. Do not use it until the placeholders are completed and the responsibilities for records are clear.</div>
   </div></main>;
 }
