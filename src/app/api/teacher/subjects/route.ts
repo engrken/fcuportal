@@ -18,7 +18,7 @@ export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: "Complete the subject details." }, { status: 400 });
   const school = await prisma.school.findUnique({ where: { id: teacher.schoolId }, select: { plan: true } });
-  const classCount = await prisma.subject.count({ where: { schoolId: teacher.schoolId } });
+  const classCount = await prisma.subject.count({ where: { schoolId: teacher.schoolId, academicYear: parsed.data.academicYear } });
   const classLimit = SCHOOL_PLAN_LIMITS[school?.plan || "FREE"].classes;
   if (classCount >= classLimit) return NextResponse.json({ error: `Your school plan allows ${classLimit} classes. Upgrade the school plan to add another class.` }, { status: 402 });
   const subject = await prisma.subject.create({ data: { ...parsed.data, schoolId: teacher.schoolId, teacherId: teacher.id, gradeBands: { create: SAMPLE_GRADE_BANDS.map((band, sortOrder) => ({ ...band, sortOrder })) } } });
