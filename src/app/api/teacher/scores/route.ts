@@ -11,7 +11,7 @@ export async function PUT(request: Request) {
     prisma.assessment.findFirst({ where: { id: parsed.data.assessmentId, subject: { teacherId: teacher.id, schoolId: teacher.schoolId } } })
   ]);
   if (!enrollment || !assessment || enrollment.subjectId !== assessment.subjectId) return NextResponse.json({ error: "Record not found." }, { status: 404 });
-  if (enrollment.subject.gradeStatus === "VERIFIED") return NextResponse.json({ error: "This grade record is final. Ask the registrar to reopen it before changing scores." }, { status: 409 });
+  if (enrollment.subject.gradeStatus === "VERIFIED") return NextResponse.json({ error: "This grade record is final. Recall it before changing scores." }, { status: 409 });
   const isAttendance = assessment.title.toLocaleLowerCase().startsWith("attendance ·");
   if (isAttendance && parsed.data.points !== null) return NextResponse.json({ error: "Attendance is recorded as present, absent, or excused days, not points." }, { status: 400 });
   if (parsed.data.points !== null && parsed.data.points > assessment.maxScore) return NextResponse.json({ error: "Score cannot exceed the maximum points." }, { status: 400 });
