@@ -93,13 +93,17 @@ model Enrollment {
 model GradeCategory {
   id          String      @id @default(cuid())
   subjectId   String
+  parentId    String?
   name        String
   weight      Float
   conversionBase Float    @default(0)
   sortOrder   Int         @default(0)
   subject     Subject     @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  parent      GradeCategory? @relation("GradeCategoryTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children    GradeCategory[] @relation("GradeCategoryTree")
   assessments Assessment[]
   @@unique([subjectId, name])
+  @@index([subjectId, parentId, sortOrder])
 }
 
 model Assessment {
@@ -108,6 +112,7 @@ model Assessment {
   categoryId String
   title      String
   maxScore   Float
+  weight     Float?
   dueDate    DateTime?
   createdAt  DateTime      @default(now())
   subject    Subject       @relation(fields: [subjectId], references: [id], onDelete: Cascade)
