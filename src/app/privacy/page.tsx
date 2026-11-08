@@ -16,7 +16,7 @@ export default async function PrivacyPage({ searchParams }: { searchParams: Prom
     <h2>Purpose and information processed</h2>
     <p>The portal supports class rosters, attendance, assessment records, grade computation, and release of results to students. Information may include name, email address, student ID, course/program, year level, class enrollment, attendance, assessment scores, calculated grades, account information, and security records.</p>
     <h2>Access and school separation</h2>
-    <p>Accounts, class records, and student directories are assigned to a selected school workspace. Teachers and registrars can access records only in their school and only for their role. Students can access grades linked to their account. Quick Check requires the school, student ID, and matching email. Submitted grades remain provisional until the school workspace’s registrar verifies them.</p>
+    <p>Accounts, class records, and student directories are assigned to a selected school workspace. Teachers can access class records only within their school workspace. Students can access grades linked to their account. Quick Check requires the school, student ID, and matching email. Submitted grades remain provisional until the teacher publishes the final grade record.</p>
     <h2>Retention and requests</h2>
     <p>Records should be retained only for the period required by the school’s purpose and policy. For access, correction, deletion where applicable, or privacy concerns, contact the responsible school privacy contact or the teacher managing the class. Applicable legal obligations, including the Data Privacy Act of 2012, should be assessed by the school’s privacy professional or Data Protection Officer.</p>
     <h2>Hosting and security</h2>
