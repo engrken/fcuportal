@@ -25,7 +25,8 @@ export type GradeCalculationCategory = {
 };
 
 export function calculateCategoryPercent(category: Pick<GradeCalculationCategory, "conversionBase" | "assessments">) {
-  const base = category.conversionBase ?? 0;
+  // Grade computation is proportional to points earned; do not apply a category credit floor.
+  const base = 0;
   const active = category.assessments.filter(assessment => assessment.scores[0]?.remark !== "EXCUSED");
   if (!active.length) return null;
   if (category.assessments.some(assessment => assessment.weight !== null && assessment.weight !== undefined)) {
