@@ -20,12 +20,37 @@ const categorySchema = z.object({ categories: z.array(z.object({ id: z.string(),
 const rosterSchema = z.object({ students: z.array(z.object({ studentName: z.string().trim().min(2).max(120), studentNumber: z.string().trim().max(40).optional() })).min(1).max(100) });
 const assessmentSchema = z.object({ categoryId: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), dueDate: z.string().optional() });
 const publishSchema = z.object({ isPublished: z.boolean() });
+const remarkSchema = z.object({ enrollmentId: z.string(), remark: z.enum(["INC", "NP", "DROPPED"]).nullable() });
+const copyGradingSchema = z.object({ copyGradingFromSubjectId: z.string() });
 const bandsSchema = z.object({ gradeBands: z.array(z.object({ id: z.string(), minPercent: z.number().min(0).max(100), finalGrade: z.string().trim().min(1).max(12), remarks: z.string().trim().min(1).max(40) })).min(2).max(30) });
 export async function PATCH(request: Request, context: Context) {
   const teacher = await requireRole("TEACHER"); if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { subjectId } = await context.params; const subject = await ownedSubject(subjectId, teacher.id);
   if (!subject) return NextResponse.json({ error: "Subject not found" }, { status: 404 });
   const input = await request.json();
+  if ("copyGradingFromSubjectId" in input) {
+    const parsed = copyGradingSchema.safeParse(input); if (!parsed.success) return NextResponse.json({ error: "Choose a class grading setup to copy." }, { status: 400 });
+    if (parsed.data.copyGradingFromSubjectId === subjectId) return NextResponse.json({ error: "Choose a different class." }, { status: 400 });
+    if (subject.assessments.length > 0) return NextResponse.json({ error: "Copy the grading setup before adding assessments; this class already has assessments." }, { status: 409 });
+    const source = await ownedSubject(parsed.data.copyGradingFromSubjectId, teacher.id);
+    if (!source) return NextResponse.json({ error: "Source class not found." }, { status: 404 });
+    await prisma.$transaction(async tx => {
+      await tx.gradeCategory.deleteMany({ where: { subjectId } });
+      await tx.gradeBand.deleteMany({ where: { subjectId } });
+      for (const category of source.categories) await tx.gradeCategory.create({ data: { subjectId, name: category.name, weight: category.weight, conversionBase: category.conversionBase, sortOrder: category.sortOrder } });
+      for (const band of source.gradeBands) await tx.gradeBand.create({ data: { subjectId, minPercent: band.minPercent, finalGrade: band.finalGrade, remarks: band.remarks, sortOrder: band.sortOrder } });
+      await tx.auditEvent.create({ data: { actorId: teacher.id, action: `copied grading setup from ${source.code}`, entity: "subject", entityId: subjectId } });
+    });
+    return NextResponse.json({ ok: true });
+  }
+  if ("remark" in input) {
+    const parsed = remarkSchema.safeParse(input); if (!parsed.success) return NextResponse.json({ error: "Choose a valid class remark." }, { status: 400 });
+    const enrollment = await prisma.enrollment.findFirst({ where: { id: parsed.data.enrollmentId, subjectId } });
+    if (!enrollment) return NextResponse.json({ error: "Student roster record not found." }, { status: 404 });
+    await prisma.enrollment.update({ where: { id: enrollment.id }, data: { remarks: parsed.data.remark } });
+    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: parsed.data.remark ? `set student remark ${parsed.data.remark}` : "cleared student remark", entity: "enrollment", entityId: enrollment.id } });
+    return NextResponse.json({ ok: true });
+  }
   if ("gradeBands" in input) {
     const parsed = bandsSchema.safeParse(input); if (!parsed.success) return NextResponse.json({ error: "Invalid final-grade scale." }, { status: 400 });
     const values = parsed.data.gradeBands;
