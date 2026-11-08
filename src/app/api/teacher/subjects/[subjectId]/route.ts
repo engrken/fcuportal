@@ -67,7 +67,7 @@ export async function PATCH(request: Request, context: Context) {
         const index = pending.findIndex(category => !category.parentId || categoryIds.has(category.parentId));
         if (index < 0) throw new Error("The source grading structure contains a cycle.");
         const [category] = pending.splice(index, 1);
-        const created = await tx.gradeCategory.create({ data: { subjectId, parentId: category.parentId ? categoryIds.get(category.parentId) : null, name: category.name, weight: category.weight, conversionBase: category.conversionBase, sortOrder: category.sortOrder } });
+        const created = await tx.gradeCategory.create({ data: { subjectId, parentId: category.parentId ? categoryIds.get(category.parentId) : null, name: category.name, weight: category.weight, conversionBase: 0, sortOrder: category.sortOrder } });
         categoryIds.set(category.id, created.id);
       }
       for (const band of source.gradeBands) await tx.gradeBand.create({ data: { subjectId, minPercent: band.minPercent, finalGrade: band.finalGrade, remarks: band.remarks, sortOrder: band.sortOrder } });
@@ -142,7 +142,7 @@ export async function PATCH(request: Request, context: Context) {
       const existing = subject.categories.find(c => c.id === category.id)!;
       if ((category.parentId ?? null) !== (existing.parentId ?? null) && subject.assessments.some(a => a.categoryId === existing.id)) return NextResponse.json({ error: "Move assessments before changing a category that contains them." }, { status: 409 });
     }
-    for (const category of values) await prisma.gradeCategory.update({ where: { id: category.id }, data: { parentId: category.parentId ?? null, name: category.name, weight: category.weight, conversionBase: category.conversionBase } });
+    for (const category of values) await prisma.gradeCategory.update({ where: { id: category.id }, data: { parentId: category.parentId ?? null, name: category.name, weight: category.weight, conversionBase: 0 } });
     await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "updated grading weights", entity: "subject", entityId: subjectId } });
     return NextResponse.json({ ok: true });
   }
