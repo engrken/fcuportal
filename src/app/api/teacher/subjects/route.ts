@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { SAMPLE_GRADE_BANDS } from "@/lib/grades";
 import { SCHOOL_PLAN_LIMITS } from "@/lib/plans";
 
-const schema = z.object({ code: z.string().trim().min(1).max(30), title: z.string().trim().min(2).max(160), term: z.string().trim().min(1).max(40), academicYear: z.string().trim().min(4).max(20), schedule: z.string().trim().max(4000).optional(), courseYear: z.string().trim().max(80).optional() });
+const schema = z.object({ classId: z.string().trim().min(1).max(40), code: z.string().trim().min(1).max(30), title: z.string().trim().min(2).max(160), term: z.string().trim().min(1).max(40), academicYear: z.string().trim().min(4).max(20), schedule: z.string().trim().max(4000).optional(), courseYear: z.string().trim().max(80).optional() });
 export async function GET() {
   const teacher = await requireRole("TEACHER");
   if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -17,6 +17,7 @@ export async function POST(request: Request) {
   if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: "Complete the subject details." }, { status: 400 });
+  if (await prisma.subject.findFirst({ where: { schoolId: teacher.schoolId, classId: { equals: parsed.data.classId, mode: "insensitive" } }, select: { id: true } })) return NextResponse.json({ error: "That Class ID is already used in this school." }, { status: 409 });
   const school = await prisma.school.findUnique({ where: { id: teacher.schoolId }, select: { plan: true } });
   const classCount = await prisma.subject.count({ where: { schoolId: teacher.schoolId, academicYear: parsed.data.academicYear } });
   const classLimit = SCHOOL_PLAN_LIMITS[school?.plan || "FREE"].classes;

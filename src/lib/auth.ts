@@ -28,7 +28,7 @@ export async function getSession() {
   try {
     const { payload } = await jwtVerify(token, key());
     if (!payload.sub) return null;
-    const user = await prisma.user.findUnique({ where: { id: payload.sub }, select: { id: true, role: true, schoolId: true, fullName: true, email: true, studentNumber: true, courseProgram: true, yearLevel: true, passwordChangedAt: true, school: { select: { id: true, slug: true, name: true, shortName: true, portalTitle: true, logoText: true, primaryColor: true, privacyController: true, privacyContactEmail: true, privacyPolicyUrl: true, isActive: true, subscriptionStatus: true, subscriptionExpiresAt: true } } } });
+    const user = await prisma.user.findUnique({ where: { id: payload.sub }, select: { id: true, role: true, schoolId: true, fullName: true, email: true, studentNumber: true, courseProgram: true, yearLevel: true, profileImagePath: true, passwordChangedAt: true, school: { select: { id: true, slug: true, name: true, shortName: true, portalTitle: true, logoText: true, logoPath: true, primaryColor: true, privacyController: true, privacyContactEmail: true, privacyPolicyUrl: true, isActive: true, subscriptionStatus: true, subscriptionExpiresAt: true } } } });
     if (user?.passwordChangedAt && (!payload.iat || user.passwordChangedAt.getTime() >= payload.iat * 1000)) return null;
     if (!user || !user.school.isActive || user.school.subscriptionStatus !== "ACTIVE" || (user.school.subscriptionExpiresAt && user.school.subscriptionExpiresAt <= new Date())) return null;
     const { passwordChangedAt: _passwordChangedAt, ...sessionUser } = user;

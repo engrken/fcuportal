@@ -27,6 +27,7 @@ const assessmentUpdatesSchema = z.object({ assessmentItems: z.array(z.object({ i
 const remarkSchema = z.object({ enrollmentId: z.string(), remark: z.enum(["INC", "NP", "DROPPED"]).nullable() });
 const copyGradingSchema = z.object({ copyGradingFromSubjectId: z.string() });
 const bandsSchema = z.object({ gradeBands: z.array(z.object({ id: z.string().optional(), minPercent: z.number().min(0).max(100), finalGrade: z.string().trim().min(1).max(12), remarks: z.string().trim().min(1).max(40) })).min(2).max(30) });
+const subjectDetailsSchema = z.object({ updateSubject: z.object({ classId: z.string().trim().min(1).max(40), code: z.string().trim().min(1).max(30), title: z.string().trim().min(2).max(160), term: z.string().trim().min(1).max(40), academicYear: z.string().trim().min(4).max(20), schedule: z.string().trim().max(4000).nullable(), courseYear: z.string().trim().max(80).nullable() }) });
 export async function PATCH(request: Request, context: Context) {
   const teacher = await requireRole("TEACHER"); if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { subjectId } = await context.params; const subject = await ownedSubject(subjectId, teacher.id, teacher.schoolId);
@@ -40,6 +41,24 @@ export async function PATCH(request: Request, context: Context) {
       prisma.auditEvent.create({ data: { actorId: teacher.id, action: "recalled submitted grades to draft", entity: "subject", entityId: subjectId } })
     ]);
     return NextResponse.json({ ok: true, gradeStatus: "DRAFT" });
+  }
+  if ("updateSubject" in input) {
+    if (subject.gradeStatus !== "DRAFT") return NextResponse.json({ error: "Recall submitted grades before editing class details." }, { status: 409 });
+    const parsed = subjectDetailsSchema.safeParse(input); if (!parsed.success) return NextResponse.json({ error: "Check the Class ID and class details." }, { status: 400 });
+    const details = parsed.data.updateSubject;
+    if (await prisma.subject.findFirst({ where: { schoolId: teacher.schoolId, id: { not: subjectId }, classId: { equals: details.classId, mode: "insensitive" } }, select: { id: true } })) return NextResponse.json({ error: "That Class ID is already used in this school." }, { status: 409 });
+    await prisma.subject.update({ where: { id: subjectId }, data: details });
+    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "updated class identity, schedule, or course details", entity: "subject", entityId: subjectId } });
+    return NextResponse.json({ ok: true });
+  }
+  if ("deleteSubject" in input) {
+    if (input.deleteSubject !== true) return NextResponse.json({ error: "Confirm class deletion." }, { status: 400 });
+    if (subject.gradeStatus !== "DRAFT") return NextResponse.json({ error: "Recall submitted grades before deleting this class." }, { status: 409 });
+    await prisma.$transaction(async tx => {
+      await tx.auditEvent.create({ data: { actorId: teacher.id, action: `deleted draft class ${subject.classId || subject.code}`, entity: "subject", entityId: subjectId } });
+      await tx.subject.delete({ where: { id: subjectId } });
+    });
+    return NextResponse.json({ ok: true, deleted: true });
   }
   if ("submitGrades" in input) {
     if (subject.gradeStatus === "VERIFIED") return NextResponse.json({ error: "These grades have already been finalized. Recall them before making a correction." }, { status: 409 });
