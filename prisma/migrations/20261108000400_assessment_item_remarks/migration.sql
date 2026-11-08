@@ -1,0 +1,2 @@
+ALTER TABLE "Score"
+ADD COLUMN "remark" TEXT;

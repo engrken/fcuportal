@@ -20,7 +20,7 @@ export async function PATCH(_request: Request, context: Context) {
     if (category.weight > 0 && !items.length) return NextResponse.json({ error: `The category ${category.name} has no assessment items. Return the record to the teacher for correction.` }, { status: 409 });
     if (items.some(item => item.weight !== null) && (items.some(item => item.weight === null) || Math.abs(items.reduce((sum, item) => sum + (item.weight ?? 0), 0) - 100) > 0.01)) return NextResponse.json({ error: `Assessment item weights in ${category.name} are incomplete.` }, { status: 409 });
   }
-  const incomplete = subject.enrollments.filter(enrollment => !enrollment.remarks && subject.assessments.some(item => !enrollment.scores.some(score => score.assessmentId === item.id && score.points !== null)));
+  const incomplete = subject.enrollments.filter(enrollment => !enrollment.remarks && subject.assessments.some(item => !enrollment.scores.some(score => score.assessmentId === item.id && (score.points !== null || !!score.remark))));
   if (incomplete.length) return NextResponse.json({ error: `${incomplete.length} student record(s) still have missing assessment scores.` }, { status: 409 });
   const now = new Date();
   await prisma.$transaction([

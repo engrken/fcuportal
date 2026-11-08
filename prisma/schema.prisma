@@ -136,6 +136,7 @@ model Score {
   enrollmentId String
   assessmentId String
   points       Float?
+  remark       String?
   updatedAt    DateTime   @updatedAt
   enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
   assessment  Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)

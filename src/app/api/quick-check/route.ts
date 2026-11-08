@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { checkAuthThrottle } from "@/lib/rate-limit";
-import { calculateFinal, equivalentFromBands } from "@/lib/grades";
+import { calculateCategoryPercent, calculateFinal, equivalentFromBands } from "@/lib/grades";
 
 const schema = z.object({
   studentNumber: z.string().trim().min(4).max(40),
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     where: { studentNumber: profile.studentNumber, subject: { gradeStatus: { in: ["SUBMITTED", "VERIFIED"] } } },
     include: { subject: { include: {
       teacher: { select: { fullName: true } }, gradeBands: true,
-      categories: { orderBy: { sortOrder: "asc" }, include: { assessments: { orderBy: { createdAt: "asc" }, include: { scores: { where: { enrollment: { studentNumber: profile.studentNumber } }, select: { enrollmentId: true, points: true } } } } } }
+      categories: { orderBy: { sortOrder: "asc" }, include: { assessments: { orderBy: { createdAt: "asc" }, include: { scores: { where: { enrollment: { studentNumber: profile.studentNumber } }, select: { enrollmentId: true, points: true, remark: true } } } } } }
     } } },
     orderBy: [{ subject: { academicYear: "desc" } }, { subject: { code: "asc" } }]
   });
@@ -46,13 +46,10 @@ export async function POST(request: Request) {
       teacher: subject.teacher.fullName, status: subject.gradeStatus, submittedAt: subject.submittedAt, verifiedAt: subject.verifiedAt,
       percent, finalGrade: equivalent.finalGrade, remarks: enrollment.remarks || equivalent.remarks,
       categories: subject.categories.filter(category => !subject.categories.some(child => child.parentId === category.id)).map(category => {
-        const itemScores = category.assessments.map(item => ({
-          id: item.id, title: item.title, points: item.scores.find(score => score.enrollmentId === enrollment.id)?.points ?? null,
-          maxScore: item.maxScore, weight: item.weight, dueDate: item.dueDate
-        }));
+        const gradeCategory = { conversionBase: category.conversionBase, assessments: category.assessments.map(item => ({ maxScore: item.maxScore, weight: item.weight, scores: item.scores.filter(score => score.enrollmentId === enrollment.id) })) };
         let effectiveWeight = category.weight; let parentId = category.parentId;
         while (parentId) { const parent = subject.categories.find(item => item.id === parentId); if (!parent) break; effectiveWeight *= parent.weight / 100; parentId = parent.parentId; }
-        return { name: pathFor(category.id), weight: effectiveWeight, conversionBase: category.conversionBase, assessments: itemScores };
+        return { name: pathFor(category.id), weight: effectiveWeight, percent: calculateCategoryPercent(gradeCategory) };
       })
     };
   });

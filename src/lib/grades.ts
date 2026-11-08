@@ -21,11 +21,31 @@ export type GradeCalculationCategory = {
   parentId?: string | null;
   weight: number;
   conversionBase?: number;
-  assessments: Array<{ maxScore: number; weight?: number | null; scores: Array<{ points: number | null }> }>;
+  assessments: Array<{ maxScore: number; weight?: number | null; scores: Array<{ points: number | null; remark?: string | null }> }>;
 };
 
+export function calculateCategoryPercent(category: Pick<GradeCalculationCategory, "conversionBase" | "assessments">) {
+  const base = category.conversionBase ?? 0;
+  const active = category.assessments.filter(assessment => assessment.scores[0]?.remark !== "EXCUSED");
+  if (!active.length) return null;
+  if (category.assessments.some(assessment => assessment.weight !== null && assessment.weight !== undefined)) {
+    const totalWeight = active.reduce((sum, assessment) => sum + (assessment.weight ?? 0), 0);
+    if (!totalWeight) return null;
+    const weighted = active.reduce((sum, assessment) => {
+      const score = assessment.scores[0];
+      const points = score?.points ?? 0;
+      const percent = base + (points / assessment.maxScore) * (100 - base);
+      return sum + percent * (assessment.weight ?? 0);
+    }, 0);
+    return Math.round((weighted / totalWeight) * 100) / 100;
+  }
+  const possible = active.reduce((sum, assessment) => sum + assessment.maxScore, 0);
+  const earned = active.reduce((sum, assessment) => sum + (assessment.scores[0]?.points ?? 0), 0);
+  return possible ? Math.round((base + (earned / possible) * (100 - base)) * 100) / 100 : null;
+}
+
 export function calculateFinal(categories: GradeCalculationCategory[]) {
-  if (!categories.some(category => category.assessments.length > 0 && category.assessments.some(assessment => assessment.scores.some(score => score.points !== null)))) return null;
+  if (!categories.some(category => category.assessments.some(assessment => assessment.scores.some(score => score.points !== null || (!!score.remark && score.remark !== "EXCUSED"))))) return null;
   const childrenByParent = new Map<string | null, GradeCalculationCategory[]>();
   for (const category of categories) {
     const parentId = category.parentId ?? null;
@@ -42,17 +62,7 @@ export function calculateFinal(categories: GradeCalculationCategory[]) {
       return children.reduce((sum, child) => sum + (calculateCategory(child, nextPath) ?? 0) * child.weight / 100, 0);
     }
     if (!category.assessments.length) return 0;
-    const base = category.conversionBase ?? 0;
-    if (category.assessments.some(assessment => assessment.weight !== null && assessment.weight !== undefined)) {
-      return category.assessments.reduce((sum, assessment) => {
-        const points = assessment.scores.find(score => score.points !== null)?.points ?? 0;
-        const percent = base + (points / assessment.maxScore) * (100 - base);
-        return sum + percent * (assessment.weight ?? 0) / 100;
-      }, 0);
-    }
-    const possible = category.assessments.reduce((sum, assessment) => sum + assessment.maxScore, 0);
-    const earned = category.assessments.reduce((sum, assessment) => sum + (assessment.scores.find(score => score.points !== null)?.points ?? 0), 0);
-    return possible ? base + (earned / possible) * (100 - base) : 0;
+    return calculateCategoryPercent({ conversionBase: category.conversionBase, assessments: category.assessments });
   };
 
   const result = (childrenByParent.get(null) ?? []).reduce((sum, category) => sum + (calculateCategory(category) ?? 0) * category.weight / 100, 0);
