@@ -37,3 +37,18 @@ export async function POST(request: Request) {
   }
   return NextResponse.json({ linked, skipped });
 }
+
+const unlinkSchema = z.object({ enrollmentId: z.string().min(1) });
+export async function DELETE(request: Request) {
+  const teacher = await requireRole("TEACHER"); if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const parsed = unlinkSchema.safeParse(await request.json()); if (!parsed.success) return NextResponse.json({ error: "Choose a linked student roster record." }, { status: 400 });
+  const enrollment = await prisma.enrollment.findFirst({ where: { id: parsed.data.enrollmentId, subject: { teacherId: teacher.id } }, include: { subject: { select: { gradeStatus: true } } } });
+  if (!enrollment) return NextResponse.json({ error: "Student roster record not found." }, { status: 404 });
+  if (enrollment.subject.gradeStatus === "VERIFIED") return NextResponse.json({ error: "Finalized records are locked. Ask the registrar to recall the grade before unlinking an account." }, { status: 409 });
+  if (!enrollment.studentUserId) return NextResponse.json({ ok: true, unlinked: false });
+  await prisma.$transaction([
+    prisma.enrollment.update({ where: { id: enrollment.id }, data: { studentUserId: null } }),
+    prisma.auditEvent.create({ data: { actorId: teacher.id, action: "unlinked student portal account", entity: "enrollment", entityId: enrollment.id } })
+  ]);
+  return NextResponse.json({ ok: true, unlinked: true });
+}
