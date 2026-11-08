@@ -8,7 +8,26 @@ export async function GET() {
   if (!student) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const enrollments = await prisma.enrollment.findMany({
     where: { studentUserId: student.id, subject: { isPublished: true } },
-    include: { subject: { include: { teacher: { select: { fullName: true } }, gradeBands: true, categories: { include: { assessments: { include: { scores: { where: { enrollment: { studentUserId: student.id } }, select: { points: true } } } } } } } },
+    include: {
+      subject: {
+        include: {
+          teacher: { select: { fullName: true } },
+          gradeBands: true,
+          categories: {
+            include: {
+              assessments: {
+                include: {
+                  scores: {
+                    where: { enrollment: { studentUserId: student.id } },
+                    select: { points: true }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     orderBy: { subject: { code: "asc" } }
   });
   const grades = enrollments.map(enrollment => {
