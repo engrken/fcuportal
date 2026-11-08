@@ -23,6 +23,7 @@ model User {
   id            String       @id @default(cuid())
   email         String       @unique
   passwordHash  String
+  passwordChangedAt DateTime?
   role          Role
   fullName      String
   studentNumber String?      @unique
@@ -34,6 +35,7 @@ model User {
   subjects      Subject[]    @relation("TeacherSubjects")
   enrollments   Enrollment[] @relation("StudentEnrollments")
   auditEvents   AuditEvent[]
+  passwordResetTokens PasswordResetToken[]
 }
 
 model StudentDirectory {
@@ -160,4 +162,15 @@ model AuthThrottle {
   resetAt   DateTime
   updatedAt DateTime @updatedAt
   @@index([resetAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, expiresAt])
 }
