@@ -19,12 +19,27 @@ model User {
   role          Role
   fullName      String
   studentNumber String?      @unique
+  courseProgram String?
+  yearLevel     String?
   privacyNoticeAcceptedAt DateTime?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
   subjects      Subject[]    @relation("TeacherSubjects")
   enrollments   Enrollment[] @relation("StudentEnrollments")
   auditEvents   AuditEvent[]
+}
+
+model StudentDirectory {
+  studentNumber String   @id
+  firstName     String
+  middleName    String?
+  lastName      String
+  fullName      String
+  email         String   @unique
+  courseProgram String
+  yearLevel     String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model Subject {
