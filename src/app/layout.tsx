@@ -3,8 +3,8 @@ import "./globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Faculty Grade Portal",
-  description: "An independently operated grade portal for faculty and their students."
+  title: "SAGA Portal | School Assessment, Grading & Analytics",
+  description: "A practical grade portal for teachers to manage class records, assessment, attendance, and student grade access."
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
