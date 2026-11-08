@@ -6,12 +6,12 @@ import { calculateCategoryPercent, calculateFinal, equivalentFromBands } from "@
 import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
 
 type Context = { params: Promise<{ subjectId: string }> };
-async function ownedSubject(subjectId: string, teacherId: string) {
-  return prisma.subject.findFirst({ where: { id: subjectId, teacherId }, include: { categories: { orderBy: { sortOrder: "asc" } }, gradeBands: { orderBy: { sortOrder: "asc" } }, assessments: { orderBy: { createdAt: "asc" } }, enrollments: { orderBy: { studentName: "asc" }, include: { scores: true, student: { select: { email: true } } } } } });
+async function ownedSubject(subjectId: string, teacherId: string, schoolId: string) {
+  return prisma.subject.findFirst({ where: { id: subjectId, teacherId, schoolId }, include: { categories: { orderBy: { sortOrder: "asc" } }, gradeBands: { orderBy: { sortOrder: "asc" } }, assessments: { orderBy: { createdAt: "asc" } }, enrollments: { orderBy: { studentName: "asc" }, include: { scores: true, student: { select: { email: true } } } } } });
 }
 export async function GET(_request: Request, context: Context) {
   const teacher = await requireRole("TEACHER"); if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { subjectId } = await context.params; const subject = await ownedSubject(subjectId, teacher.id);
+  const { subjectId } = await context.params; const subject = await ownedSubject(subjectId, teacher.id, teacher.schoolId);
   if (!subject) return NextResponse.json({ error: "Subject not found" }, { status: 404 });
   const details = subject.enrollments.map(enrollment => ({ ...enrollment, finalPercent: calculateFinal(subject.categories.map(category => ({ id: category.id, parentId: category.parentId, weight: category.weight, conversionBase: category.conversionBase, assessments: subject.assessments.filter(a => a.categoryId === category.id).map(a => ({ maxScore: a.maxScore, weight: a.weight, scores: enrollment.scores.filter(s => s.assessmentId === a.id) })) }))) }));
   return NextResponse.json({ subject: { ...subject, enrollments: details } });
@@ -28,7 +28,7 @@ const copyGradingSchema = z.object({ copyGradingFromSubjectId: z.string() });
 const bandsSchema = z.object({ gradeBands: z.array(z.object({ id: z.string(), minPercent: z.number().min(0).max(100), finalGrade: z.string().trim().min(1).max(12), remarks: z.string().trim().min(1).max(40) })).min(2).max(30) });
 export async function PATCH(request: Request, context: Context) {
   const teacher = await requireRole("TEACHER"); if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { subjectId } = await context.params; const subject = await ownedSubject(subjectId, teacher.id);
+  const { subjectId } = await context.params; const subject = await ownedSubject(subjectId, teacher.id, teacher.schoolId);
   if (!subject) return NextResponse.json({ error: "Subject not found" }, { status: 404 });
   const input = await request.json();
   if ("recallGrades" in input) {
@@ -87,7 +87,7 @@ export async function PATCH(request: Request, context: Context) {
     const parsed = copyGradingSchema.safeParse(input); if (!parsed.success) return NextResponse.json({ error: "Choose a class grading setup to copy." }, { status: 400 });
     if (parsed.data.copyGradingFromSubjectId === subjectId) return NextResponse.json({ error: "Choose a different class." }, { status: 400 });
     if (subject.assessments.length > 0) return NextResponse.json({ error: "Copy the grading setup before adding assessments; this class already has assessments." }, { status: 409 });
-    const source = await ownedSubject(parsed.data.copyGradingFromSubjectId, teacher.id);
+    const source = await ownedSubject(parsed.data.copyGradingFromSubjectId, teacher.id, teacher.schoolId);
     if (!source) return NextResponse.json({ error: "Source class not found." }, { status: 404 });
     await prisma.$transaction(async tx => {
       await tx.gradeCategory.deleteMany({ where: { subjectId } });
@@ -190,7 +190,7 @@ export async function PATCH(request: Request, context: Context) {
 
 export async function POST(request: Request, context: Context) {
   const teacher = await requireRole("TEACHER"); if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { subjectId } = await context.params; const subject = await ownedSubject(subjectId, teacher.id);
+  const { subjectId } = await context.params; const subject = await ownedSubject(subjectId, teacher.id, teacher.schoolId);
   if (!subject) return NextResponse.json({ error: "Subject not found" }, { status: 404 });
   if (subject.gradeStatus === "VERIFIED") return NextResponse.json({ error: "This grade record has been verified and is final. Ask the registrar to reopen it before editing." }, { status: 409 });
   const input = await request.json();
