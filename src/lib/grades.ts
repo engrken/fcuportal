@@ -24,11 +24,15 @@ export type GradeCalculationCategory = {
   assessments: Array<{ maxScore: number; weight?: number | null; scores: Array<{ points: number | null; remark?: string | null }> }>;
 };
 
+export function convertRawPercent(rawPercent: number, conversionBase = 50) {
+  const base = Math.min(100, Math.max(1, conversionBase));
+  return Math.round((rawPercent * base / 100 + (100 - base)) * 100) / 100;
+}
+
 export function calculateCategoryPercent(category: Pick<GradeCalculationCategory, "conversionBase" | "assessments">) {
   // Transmute the raw percent using the selected grading base. For example,
   // base 70 follows raw% × 70% + 30%; a raw score of 70% becomes 79%.
-  const base = Math.min(100, Math.max(0, category.conversionBase ?? 50));
-  const transmute = (rawPercent: number) => rawPercent * base / 100 + (100 - base);
+  const transmute = (rawPercent: number) => convertRawPercent(rawPercent, category.conversionBase ?? 50);
   const active = category.assessments.filter(assessment => assessment.scores[0]?.remark !== "EXCUSED");
   if (!active.length) return null;
   if (category.assessments.some(assessment => assessment.weight !== null && assessment.weight !== undefined)) {
@@ -40,7 +44,7 @@ export function calculateCategoryPercent(category: Pick<GradeCalculationCategory
       const percent = transmute((points / assessment.maxScore) * 100);
       return sum + percent * (assessment.weight ?? 0);
     }, 0);
-    return Math.round((weighted / totalWeight) * 100) / 100;
+    return Math.round(weighted / totalWeight * 100) / 100;
   }
   const possible = active.reduce((sum, assessment) => sum + assessment.maxScore, 0);
   const earned = active.reduce((sum, assessment) => sum + (assessment.scores[0]?.remark === "PRESENT" ? assessment.maxScore : assessment.scores[0]?.remark === "ABSENT" ? 0 : assessment.scores[0]?.points ?? 0), 0);
