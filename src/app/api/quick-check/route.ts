@@ -20,9 +20,10 @@ export async function POST(request: Request) {
   const networkThrottle = await checkAuthThrottle(request, "quick-check-network", 25);
   if (!throttle.allowed || !networkThrottle.allowed) return NextResponse.json({ error: "Too many quick-check attempts. Try again in 15 minutes." }, { status: 429 });
 
-  const profile = await prisma.studentDirectory.findFirst({ where: { schoolId, studentNumber, email } });
+  const profile = await prisma.studentDirectory.findUnique({ where: { schoolId_studentNumber: { schoolId, studentNumber } } });
   if (!profile) return NextResponse.json({ error: "We could not verify those details. Check the student ID and email address or contact your teacher." }, { status: 404 });
   const existingAccount = await prisma.user.findFirst({ where: { schoolId, role: "STUDENT", studentNumber: profile.studentNumber, email }, select: { id: true } });
+  if (profile.email.toLowerCase() !== email && !existingAccount) return NextResponse.json({ error: "We could not verify those details. Check the student ID and email address or contact your teacher." }, { status: 404 });
 
   const enrollments = await prisma.enrollment.findMany({
     where: { studentNumber: profile.studentNumber, subject: { schoolId, gradeStatus: { in: ["SUBMITTED", "VERIFIED"] } } },

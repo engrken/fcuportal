@@ -5,9 +5,10 @@ import { prisma } from "@/lib/prisma";
 const schema = z.object({ fullName: z.string().trim().min(2).max(120) });
 export async function PATCH(request: Request) {
   const user = await getSession(); if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const parsed = schema.safeParse(await request.json()); if (!parsed.success) return NextResponse.json({ error: "Check your name and email." }, { status: 400 });
+  const parsed = schema.safeParse(await request.json()); if (!parsed.success) return NextResponse.json({ error: "Enter a name between 2 and 120 characters." }, { status: 400 });
   try {
-    await prisma.user.updateMany({ where: { id: user.id, schoolId: user.schoolId }, data: { fullName: parsed.data.fullName } });
+    const updated = await prisma.user.updateMany({ where: { id: user.id, schoolId: user.schoolId }, data: { fullName: parsed.data.fullName } });
+    if (!updated.count) return NextResponse.json({ error: "Profile not found." }, { status: 404 });
     return NextResponse.json({ ok: true });
-  } catch { return NextResponse.json({ error: "That email address is already in use." }, { status: 409 }); }
+  } catch { return NextResponse.json({ error: "Unable to update your profile. Please try again." }, { status: 500 }); }
 }

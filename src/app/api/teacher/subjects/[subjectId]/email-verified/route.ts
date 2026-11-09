@@ -26,15 +26,19 @@ export async function POST(_request: Request, context: Context) {
   if (!smtpUser || !smtpPassword) return NextResponse.json({ error: "Gmail SMTP is not configured yet. Add GMAIL_SMTP_USER and GMAIL_SMTP_APP_PASSWORD in the Vercel production environment." }, { status: 503 });
 
   const ids = subject.enrollments.map(enrollment => enrollment.studentNumber).filter((value): value is string => !!value);
-  const directory = await prisma.studentDirectory.findMany({ where: { schoolId: teacher.schoolId, studentNumber: { in: ids } }, select: { studentNumber: true, email: true } });
-  const emailById = new Map(directory.map(student => [student.studentNumber, student.email]));
+  const [directory, portalAccounts] = await Promise.all([
+    prisma.studentDirectory.findMany({ where: { schoolId: teacher.schoolId, studentNumber: { in: ids } }, select: { studentNumber: true, email: true } }),
+    prisma.user.findMany({ where: { schoolId: teacher.schoolId, role: "STUDENT", studentNumber: { in: ids } }, select: { studentNumber: true, email: true } })
+  ]);
+  const directoryEmailById = new Map(directory.map(student => [student.studentNumber, student.email]));
+  const portalEmailById = new Map(portalAccounts.flatMap(student => student.studentNumber ? [[student.studentNumber, student.email] as const] : []));
   const transporter = nodemailer.createTransport({ host: "smtp.gmail.com", port: 465, secure: true, auth: { user: smtpUser, pass: smtpPassword } });
   let sent = 0;
   let skipped = 0;
   const failures: string[] = [];
 
   for (const enrollment of subject.enrollments) {
-    const to = enrollment.studentNumber ? emailById.get(enrollment.studentNumber) : undefined;
+    const to = enrollment.studentNumber ? portalEmailById.get(enrollment.studentNumber) || directoryEmailById.get(enrollment.studentNumber) : undefined;
     if (!to) { skipped++; continue; }
     const categories = subject.categories.map(category => ({
       id: category.id,
@@ -69,7 +73,7 @@ export async function POST(_request: Request, context: Context) {
     const text = [
       `Hello ${enrollment.studentName},`,
       "",
-      `Your final grade for ${subject.code}: ${subject.title} (${subject.term}, ${subject.academicYear}) has been verified in the independent Faculty Grade Portal.`,
+      `Your final grade for ${subject.code}: ${subject.title} (${subject.term}, ${subject.academicYear}) has been verified in the SAGA Student Portal.`,
       "",
       ...parts,
       "",

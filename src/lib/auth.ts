@@ -32,7 +32,11 @@ export async function getSession() {
     if (user?.passwordChangedAt && (!payload.iat || user.passwordChangedAt.getTime() >= payload.iat * 1000)) return null;
     if (!user || !user.school.isActive || user.school.subscriptionStatus !== "ACTIVE" || (user.school.subscriptionExpiresAt && user.school.subscriptionExpiresAt <= new Date())) return null;
     const { passwordChangedAt: _passwordChangedAt, ...sessionUser } = user;
-    return { ...sessionUser, isTenantManager: isTenantManagerEmail(user.email) };
+    return {
+      ...sessionUser,
+      isTenantManager: isTenantManagerEmail(user.email),
+      emailDeliveryEnabled: Boolean(process.env.GMAIL_SMTP_USER && process.env.GMAIL_SMTP_APP_PASSWORD)
+    };
   } catch { return null; }
 }
 

@@ -85,6 +85,7 @@ model User {
   enrollments   Enrollment[] @relation("StudentEnrollments")
   auditEvents   AuditEvent[]
   passwordResetTokens PasswordResetToken[]
+  emailChangeTokens EmailChangeToken[]
   @@unique([schoolId, email])
   @@unique([schoolId, studentNumber])
   @@index([schoolId, role])
@@ -234,5 +235,17 @@ model PasswordResetToken {
   usedAt    DateTime?
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, expiresAt])
+}
+
+model EmailChangeToken {
+  id          String   @id @default(cuid())
+  userId      String
+  pendingEmail String
+  tokenHash   String   @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@index([userId, expiresAt])
 }

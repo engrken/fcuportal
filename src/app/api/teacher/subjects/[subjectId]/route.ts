@@ -3,12 +3,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { calculateCategoryPercent, calculateFinal, equivalentFromBands } from "@/lib/grades";
+import { calculateCategoryPercent, calculateFinal, equivalentFromBands, LECTURE_LAB_GRADING_TEMPLATE } from "@/lib/grades";
 import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
 
 type Context = { params: Promise<{ subjectId: string }> };
 async function ownedSubject(subjectId: string, teacherId: string, schoolId: string) {
-  return prisma.subject.findFirst({ where: { id: subjectId, teacherId, schoolId }, include: { categories: { orderBy: { sortOrder: "asc" } }, gradeBands: { orderBy: { sortOrder: "asc" } }, assessments: { orderBy: { createdAt: "asc" } }, enrollments: { orderBy: { studentName: "asc" }, include: { scores: true, student: { select: { email: true } } } } } });
+  return prisma.subject.findFirst({ where: { id: subjectId, teacherId, schoolId }, include: { categories: { orderBy: { sortOrder: "asc" } }, gradeBands: { orderBy: { sortOrder: "asc" } }, assessments: { orderBy: { createdAt: "asc" } }, enrollments: { orderBy: { studentName: "asc" }, include: { scores: true } } } });
 }
 export async function GET(_request: Request, context: Context) {
   const teacher = await requireRole("TEACHER"); if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -99,12 +99,12 @@ export async function PATCH(request: Request, context: Context) {
     const { enrollmentId, studentName, studentNumber } = parsed.data.updateEnrollment;
     const enrollment = subject.enrollments.find(item => item.id === enrollmentId);
     if (!enrollment) return NextResponse.json({ error: "Student roster record not found." }, { status: 404 });
-    const number = studentNumber?.trim() || null;
+    const number = studentNumber?.trim().toUpperCase() || null;
     if (number && subject.enrollments.some(item => item.id !== enrollmentId && item.studentNumber?.toLocaleLowerCase() === number.toLocaleLowerCase())) return NextResponse.json({ error: "That student number is already in this class roster." }, { status: 409 });
-    const changedNumber = (enrollment.studentNumber || null) !== number;
-    await prisma.enrollment.update({ where: { id: enrollmentId }, data: { studentName, studentNumber: number, ...(changedNumber ? { studentUserId: null } : {}) } });
-    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: changedNumber ? "updated roster details and unlinked the mismatched student account" : "updated roster student name", entity: "enrollment", entityId: enrollmentId } });
-    return NextResponse.json({ ok: true, accountUnlinked: changedNumber && !!enrollment.studentUserId });
+    const matchingStudent = number ? await prisma.user.findFirst({ where: { schoolId: teacher.schoolId, role: "STUDENT", studentNumber: number }, select: { id: true } }) : null;
+    await prisma.enrollment.update({ where: { id: enrollmentId }, data: { studentName, studentNumber: number, studentUserId: matchingStudent?.id ?? null } });
+    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "updated class roster details", entity: "enrollment", entityId: enrollmentId } });
+    return NextResponse.json({ ok: true, studentUserId: matchingStudent?.id ?? null });
   }
   if ("deleteEnrollmentId" in input) {
     const enrollmentId = z.string().safeParse(input.deleteEnrollmentId); if (!enrollmentId.success) return NextResponse.json({ error: "Choose a student roster record to remove." }, { status: 400 });
@@ -134,6 +134,56 @@ export async function PATCH(request: Request, context: Context) {
       }
       for (const band of source.gradeBands) await tx.gradeBand.create({ data: { subjectId, minPercent: band.minPercent, finalGrade: band.finalGrade, remarks: band.remarks, sortOrder: band.sortOrder } });
       await tx.auditEvent.create({ data: { actorId: teacher.id, action: `copied grading setup from ${source.code}`, entity: "subject", entityId: subjectId } });
+    });
+    return NextResponse.json({ ok: true });
+  }
+  if (input.gradingTemplate === "LECTURE_LAB_60_40") {
+    if (subject.gradeStatus !== "DRAFT") return NextResponse.json({ error: "Recall this class to draft before changing its grading structure." }, { status: 409 });
+    const categoryById = new Map(subject.categories.map(category => [category.id, category]));
+    const categoryPathFor = (categoryId: string) => {
+      const path: string[] = [];
+      let category = categoryById.get(categoryId);
+      while (category) { path.unshift(category.name); category = category.parentId ? categoryById.get(category.parentId) : undefined; }
+      return path.join(" ").toLocaleLowerCase().replace(/[\s_-]+/g, " ");
+    };
+    const remap = subject.assessments.map(item => {
+      const source = categoryPathFor(item.categoryId);
+      const label = `${source} ${item.title.toLocaleLowerCase()}`.replace(/[\s_-]+/g, " ");
+      const isLab = /\blab(?:oratory)?\b/.test(label);
+      let key: string | null = null;
+      if (isLab && /\b(?:exam|examination|test|practical)\b/.test(label)) key = "laboratory-exam";
+      else if (isLab && /\b(?:exercise|activity|activities)\b/.test(label)) key = "laboratory-exercise";
+      else if (isLab && /\b(?:mid\s*term|finals?)\b/.test(label)) key = "laboratory-exam";
+      else if (/\bmid\s*term\b/.test(label)) key = "midterm";
+      else if (/\bfinals?\b/.test(label)) key = "finals";
+      else if (/self evaluation|self eval/.test(label)) key = "self-evaluation";
+      else if (/\bquiz(?:zes)?\b|\bassignments?\b/.test(label)) key = "quizzes-assignments";
+      else if (/\battendance\b|\bparticipation\b/.test(label)) key = "attendance-participation";
+      return { assessmentId: item.id, title: item.title, key };
+    });
+    const unmapped = remap.filter(item => !item.key);
+    if (unmapped.length) return NextResponse.json({ error: `Could not safely place these assessment items: ${unmapped.map(item => item.title).join(", ")}. Rename or move them to a clear grading category first; no changes were made.` }, { status: 409 });
+    await prisma.$transaction(async tx => {
+      const oldCategoryIds = subject.categories.map(category => category.id);
+      for (const category of subject.categories) await tx.gradeCategory.update({ where: { id: category.id }, data: { name: `__template_replaced_${category.id}` } });
+      const categoryIds = new Map<string, string>();
+      const siblingOrder = new Map<string, number>();
+      for (const category of LECTURE_LAB_GRADING_TEMPLATE) {
+        const parentId = category.parentKey ? categoryIds.get(category.parentKey) : null;
+        if (category.parentKey && !parentId) throw new Error(`Missing template parent: ${category.parentKey}`);
+        const siblingKey = category.parentKey ?? "root";
+        const sortOrder = siblingOrder.get(siblingKey) ?? 0;
+        const created = await tx.gradeCategory.create({ data: { subjectId, parentId: parentId ?? null, name: category.name, weight: category.weight, conversionBase: 70, sortOrder } });
+        categoryIds.set(category.key, created.id);
+        siblingOrder.set(siblingKey, sortOrder + 1);
+      }
+      for (const item of remap) {
+        const categoryId = item.key ? categoryIds.get(item.key) : null;
+        if (!categoryId) throw new Error(`Missing template category for assessment: ${item.title}`);
+        await tx.assessment.update({ where: { id: item.assessmentId }, data: { categoryId } });
+      }
+      if (oldCategoryIds.length) await tx.gradeCategory.deleteMany({ where: { subjectId, id: { in: oldCategoryIds } } });
+      await tx.auditEvent.create({ data: { actorId: teacher.id, action: "applied lecture/laboratory 60/40 grading template", entity: "subject", entityId: subjectId } });
     });
     return NextResponse.json({ ok: true });
   }
@@ -256,13 +306,17 @@ export async function POST(request: Request, context: Context) {
     const rosterSeats = await prisma.enrollment.count({ where: { subject: { schoolId: teacher.schoolId, academicYear: subject.academicYear } } });
     const seatLimit = SCHOOL_PLAN_LIMITS[school?.plan || "FREE"].studentSeats;
     if (rosterSeats + parsed.data.students.length > seatLimit) return NextResponse.json({ error: `Your school plan allows ${seatLimit} student-class seats. Upgrade the school plan to add more roster entries.` }, { status: 402 });
+    const numbers = [...new Set(parsed.data.students.map(student => student.studentNumber?.trim().toUpperCase()).filter((number): number is string => Boolean(number)))];
+    const matchingStudents = numbers.length ? await prisma.user.findMany({ where: { schoolId: teacher.schoolId, role: "STUDENT", studentNumber: { in: numbers } }, select: { id: true, studentNumber: true } }) : [];
+    const studentByNumber = new Map(matchingStudents.map(student => [student.studentNumber, student.id]));
     const created = [];
     for (const s of parsed.data.students) {
-      const item = await prisma.enrollment.create({ data: { subjectId, studentName: s.studentName, studentNumber: s.studentNumber || null } });
+      const studentNumber = s.studentNumber?.trim().toUpperCase() || null;
+      const item = await prisma.enrollment.create({ data: { subjectId, studentName: s.studentName, studentNumber, studentUserId: studentNumber ? studentByNumber.get(studentNumber) ?? null : null } });
       created.push(item);
     }
     await prisma.auditEvent.create({ data: { actorId: teacher.id, action: `added ${created.length} roster record(s)`, entity: "subject", entityId: subjectId } });
-    return NextResponse.json({ count: created.length }, { status: 201 });
+    return NextResponse.json({ count: created.length, enrollments: created }, { status: 201 });
   }
   const parsed = assessmentSchema.safeParse(input); if (!parsed.success) return NextResponse.json({ error: "Check assessment title, category and maximum score." }, { status: 400 });
   if (!subject.categories.some(c => c.id === parsed.data.categoryId)) return NextResponse.json({ error: "Choose a category in this subject." }, { status: 400 });

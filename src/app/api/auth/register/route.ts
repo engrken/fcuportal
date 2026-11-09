@@ -53,6 +53,8 @@ export async function POST(request: Request) {
         const normalizedSchoolName = schoolName!.trim().replace(/\s+/g, " ");
         school = await tx.school.findFirst({ where: { name: { equals: normalizedSchoolName, mode: "insensitive" }, isActive: true } });
         if (!school) {
+          const unavailableSchool = await tx.school.findFirst({ where: { name: { equals: normalizedSchoolName, mode: "insensitive" }, isActive: false }, select: { id: true } });
+          if (unavailableSchool) throw new Error("SCHOOL_INACTIVE");
           const identity = schoolIdentity(normalizedSchoolName);
           school = await tx.school.create({ data: { name: normalizedSchoolName, ...identity, portalTitle: "SAGA Portal" } });
         }
@@ -73,6 +75,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, role: user.role }, { status: 201 });
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("PLAN_LIMIT_TEACHERS:")) return NextResponse.json({ error: `This school has reached its teacher limit (${error.message.split(":")[1]}). Contact SAGA to upgrade the school plan.` }, { status: 402 });
+    if (error instanceof Error && error.message === "SCHOOL_INACTIVE") return NextResponse.json({ error: "This school workspace is currently inactive. Contact SAGA support to restore access." }, { status: 403 });
     if (error instanceof Error && error.message === "SCHOOL_NOT_READY") return NextResponse.json({ error: "That school is not accepting student registration yet." }, { status: 400 });
     if (error && typeof error === "object" && "code" in error && error.code === "P2002") return NextResponse.json({ error: "An account already uses that email or student number." }, { status: 409 });
     return NextResponse.json({ error: "Could not create the account." }, { status: 500 });

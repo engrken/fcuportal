@@ -9,6 +9,10 @@ if (!connectionString) {
   throw new Error("DATABASE_URL or MAIN_POSTGRES_PRISMA_URL must be configured.");
 }
 
-const adapter = new PrismaPg({ connectionString });
+const databaseUrl = new URL(connectionString);
+if (["prefer", "require", "verify-ca"].includes(databaseUrl.searchParams.get("sslmode") || "")) {
+  databaseUrl.searchParams.set("sslmode", "verify-full");
+}
+const adapter = new PrismaPg({ connectionString: databaseUrl.toString() });
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter });
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;

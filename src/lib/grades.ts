@@ -8,6 +8,20 @@ export const SAMPLE_CATEGORIES: GradeCategoryInput[] = [
   { name: "Attendance, Recitation & Participation", weight: 10, conversionBase: 50 }
 ];
 
+/** Default FCU engineering lecture/laboratory grading tree, in course-percent units. */
+export const LECTURE_LAB_GRADING_TEMPLATE = [
+  { key: "lecture", parentKey: null, name: "Lecture", weight: 60 },
+  { key: "major-examinations", parentKey: "lecture", name: "Major Examinations", weight: 30 },
+  { key: "midterm", parentKey: "major-examinations", name: "Midterm", weight: 12 },
+  { key: "finals", parentKey: "major-examinations", name: "Finals", weight: 18 },
+  { key: "self-evaluation", parentKey: "lecture", name: "Self-Evaluation Exercises", weight: 15 },
+  { key: "quizzes-assignments", parentKey: "lecture", name: "Quizzes/Assignments", weight: 9 },
+  { key: "attendance-participation", parentKey: "lecture", name: "Attendance/Class Participation", weight: 6 },
+  { key: "laboratory", parentKey: null, name: "Laboratory", weight: 40 },
+  { key: "laboratory-exam", parentKey: "laboratory", name: "Laboratory Exam (Written/Practical)", weight: 20 },
+  { key: "laboratory-exercise", parentKey: "laboratory", name: "Laboratory Exercise", weight: 20 }
+] as const;
+
 export const SAMPLE_GRADE_BANDS = [
   { minPercent: 98, finalGrade: "1.00", remarks: "Passed" }, { minPercent: 95, finalGrade: "1.25", remarks: "Passed" },
   { minPercent: 92, finalGrade: "1.50", remarks: "Passed" }, { minPercent: 89, finalGrade: "1.75", remarks: "Passed" },

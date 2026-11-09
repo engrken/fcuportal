@@ -7,10 +7,11 @@ SAGA (School Assessment, Grading & Analytics) is a multi-school grading portal b
 - Separate teacher and student account roles.
 - Teacher-created subjects with a class roster, assessment categories, editable weights, configurable percentage conversion, and editable final-grade thresholds/remarks.
 - Assessment scores are entered against maximum points and calculated using category weights. Sample categories reflect the current spreadsheet’s 20/30/25/15/10 weights and its 70/30 conversion for scored work; attendance/participation defaults to direct percentage.
-- Students register with their student number; teachers link the account to the correct roster record before grades can appear.
+- Student accounts automatically match same-school class roster entries by student number. Students see a class after its grades are submitted; teachers do not need a separate link step.
 - Teacher-controlled publication; students see only published subjects linked to their account.
-- Profile name editing, hashed passwords, signed HttpOnly sessions, secure production cookies, request validation, database-backed auth throttling, and grade-change audit events for key teacher actions.
-- Responsive Bootstrap UI for desktop and mobile.
+- Profile name/photo editing, verified sign-in email changes, authenticated password changes, hashed passwords, signed HttpOnly sessions, secure production cookies, request validation, database-backed auth throttling, and grade-change audit events for key teacher actions.
+- Responsive Bootstrap UI with a compact mobile score-entry view and a no-horizontal-scroll workbook layout on wider screens.
+- School-scoped page URLs: `/{schoolSlug}/overview`, `/{schoolSlug}/classes`, and `/{schoolSlug}/profile`; tenant management is at `/manage`.
 
 SAGA is an independently operated service and is not an official system of any school unless that school has separately authorized its use. The supplied workbooks are not included in this repository. They contain personal academic information and must be handled securely. Before entering real student data, the portal owner and each participating teacher should establish their respective responsibilities, lawful basis, notice, retention, access, and incident procedures under the Data Privacy Act of 2012. Obtain guidance from the appropriate privacy professional or Data Protection Officer where applicable.
 
@@ -29,15 +30,15 @@ The grade scale and default weights are examples based on the supplied grade she
 ## Deploying on Vercel + Neon
 
 1. Connect this repository to a Vercel project and provision a Neon PostgreSQL database in a region suitable for the intended users and applicable privacy obligations.
-2. Add `DATABASE_URL` (pooled runtime URL), `DIRECT_URL` (direct migration URL), `AUTH_SECRET`, and `TEACHER_INVITE_CODE` to Vercel’s environment variables. Use separate random secrets for production and preview deployments.
-3. Apply the reviewed Prisma migration against the intended database before opening the app to users. Configure `SAGA_TENANT_MANAGER_EMAIL` to the same email identity used by the CLEAR global administrator; that account must also have an active SAGA teacher login. Do not point a local or preview deployment at the production student database.
+2. Add `DATABASE_URL` (pooled runtime URL), `DIRECT_URL` (direct migration URL), `AUTH_SECRET`, and `TEACHER_INVITE_CODE` to Vercel’s environment variables. Add `GMAIL_SMTP_USER` and `GMAIL_SMTP_APP_PASSWORD` to enable password recovery and email-change verification. Use separate random secrets for production and preview deployments.
+3. Review the Prisma migrations before release. Production builds run `prisma migrate deploy`; verify that deployment is connected to the intended database. Configure `SAGA_TENANT_MANAGER_EMAIL` to the platform manager’s sign-in email; that account must also have an active SAGA teacher login. Do not point a local or preview deployment at the production student database.
 4. Deploy and confirm database connection, account creation, student/teacher access separation, roster linking, score calculations, and publication behavior with synthetic records before importing real data.
 5. Configure backups, retention, access to deployment logs, incident response, and a way for authorized staff to fulfill privacy requests.
 
 ## Before real student records are used
 
 - Complete the `/privacy` notice with the portal operator’s verified contact details, purposes, lawful basis, retention period, hosting/data-processing terms, and rights-request process. Consult the applicable Data Protection Officer or privacy professional. Do not imply school endorsement or approval.
-- Add email verification and a secure password-reset process. Student accounts are intentionally not linked to grades until a teacher verifies and links the account to a roster entry.
+- Configure and verify Gmail SMTP before relying on password recovery or email-change verification in production. Student accounts are matched automatically using the school-verified student number; the teacher still controls when grades become visible by submitting the class record.
 - Set up a controlled process for issuing and rotating the teacher invitation code.
 - Review Vercel and Neon processing terms and the selected hosting/database regions; determine who is responsible for records when other faculty use the portal. Use least-privilege access and restrict production database credentials.
 - Migrate legacy workbooks only through an approved, secure process. Do not commit workbooks, class lists, student numbers, grades, credentials, or database dumps to GitHub.
