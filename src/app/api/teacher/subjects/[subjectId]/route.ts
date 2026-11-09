@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { calculateCategoryPercent, calculateFinal, equivalentFromBands, LECTURE_LAB_GRADING_TEMPLATE, LECTURE_ONLY_GRADING_TEMPLATE } from "@/lib/grades";
+import { calculateCategoryPercent, calculateFinal, equivalentFromBands, LECTURE_LAB_GRADING_TEMPLATE, LECTURE_ONLY_GRADING_TEMPLATE, LABORATORY_ONLY_GRADING_TEMPLATE } from "@/lib/grades";
 import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
 
 type Context = { params: Promise<{ subjectId: string }> };
@@ -137,16 +137,18 @@ export async function PATCH(request: Request, context: Context) {
     });
     return NextResponse.json({ ok: true });
   }
-  if (["LECTURE_ONLY", "LECTURE_LAB" , "LECTURE_LAB_60_40"].includes(input.gradingTemplate)) {
+  if (["LECTURE_ONLY", "LABORATORY_ONLY", "LECTURE_LAB", "LECTURE_LAB_60_40"].includes(input.gradingTemplate)) {
     if (subject.gradeStatus !== "DRAFT") return NextResponse.json({ error: "Recall this class to draft before changing its grading structure." }, { status: 409 });
     const lectureOnly = input.gradingTemplate === "LECTURE_ONLY";
+    const laboratoryOnly = input.gradingTemplate === "LABORATORY_ONLY";
     const legacyTemplate = input.gradingTemplate === "LECTURE_LAB_60_40";
-    const lectureWeight = lectureOnly ? 100 : input.lectureWeight ?? (legacyTemplate ? 60 : undefined);
-    const laboratoryWeight = lectureOnly ? 0 : input.laboratoryWeight ?? (legacyTemplate ? 40 : undefined);
-    if (typeof lectureWeight !== "number" || typeof laboratoryWeight !== "number" || (lectureOnly ? lectureWeight !== 100 : lectureWeight < 1 || laboratoryWeight < 1 || Math.abs(lectureWeight + laboratoryWeight - 100) > 0.01)) {
+    const lectureWeight = lectureOnly ? 100 : laboratoryOnly ? 0 : input.lectureWeight ?? (legacyTemplate ? 60 : undefined);
+    const laboratoryWeight = laboratoryOnly ? 100 : lectureOnly ? 0 : input.laboratoryWeight ?? (legacyTemplate ? 40 : undefined);
+    const validWeights = lectureOnly ? lectureWeight === 100 : laboratoryOnly ? laboratoryWeight === 100 : typeof lectureWeight === "number" && typeof laboratoryWeight === "number" && lectureWeight >= 1 && laboratoryWeight >= 1 && Math.abs(lectureWeight + laboratoryWeight - 100) <= 0.01;
+    if (typeof lectureWeight !== "number" || typeof laboratoryWeight !== "number" || !validWeights) {
       return NextResponse.json({ error: "Enter Lecture and Laboratory weights that total exactly 100%." }, { status: 400 });
     }
-    const template = (lectureOnly ? LECTURE_ONLY_GRADING_TEMPLATE : LECTURE_LAB_GRADING_TEMPLATE).map(category => ({
+    const template = (lectureOnly ? LECTURE_ONLY_GRADING_TEMPLATE : laboratoryOnly ? LABORATORY_ONLY_GRADING_TEMPLATE : LECTURE_LAB_GRADING_TEMPLATE).map(category => ({
       ...category,
       weight: category.key === "lecture" ? lectureWeight : category.key === "laboratory" ? laboratoryWeight : category.weight
     }));
@@ -195,7 +197,8 @@ export async function PATCH(request: Request, context: Context) {
         await tx.assessment.update({ where: { id: item.assessmentId }, data: { categoryId } });
       }
       if (oldCategoryIds.length) await tx.gradeCategory.deleteMany({ where: { subjectId, id: { in: oldCategoryIds } } });
-      await tx.auditEvent.create({ data: { actorId: teacher.id, action: lectureOnly ? "applied lecture-only grading template" : `applied Lecture ${lectureWeight}% / Laboratory ${laboratoryWeight}% grading template`, entity: "subject", entityId: subjectId } });
+      const action = lectureOnly ? "applied lecture-only grading template" : laboratoryOnly ? "applied laboratory-only grading template" : `applied Lecture ${lectureWeight}% / Laboratory ${laboratoryWeight}% grading template`;
+      await tx.auditEvent.create({ data: { actorId: teacher.id, action, entity: "subject", entityId: subjectId } });
     });
     return NextResponse.json({ ok: true });
   }

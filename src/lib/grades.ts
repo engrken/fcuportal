@@ -27,6 +27,11 @@ export const LECTURE_ONLY_GRADING_TEMPLATE = LECTURE_LAB_GRADING_TEMPLATE
   .filter(category => category.key !== "laboratory" && category.parentKey !== "laboratory")
   .map(category => category.key === "lecture" ? { ...category, weight: 100 } : category);
 
+/** Laboratory-only classes use Laboratory as the 100% course component. */
+export const LABORATORY_ONLY_GRADING_TEMPLATE = LECTURE_LAB_GRADING_TEMPLATE
+  .filter(category => category.key === "laboratory" || category.parentKey === "laboratory")
+  .map(category => category.key === "laboratory" ? { ...category, weight: 100 } : category);
+
 export const SAMPLE_GRADE_BANDS = [
   { minPercent: 98, finalGrade: "1.00", remarks: "Passed" }, { minPercent: 95, finalGrade: "1.25", remarks: "Passed" },
   { minPercent: 92, finalGrade: "1.50", remarks: "Passed" }, { minPercent: 89, finalGrade: "1.75", remarks: "Passed" },
