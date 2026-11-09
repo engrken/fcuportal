@@ -15,9 +15,11 @@ const bodySchema = z.object({
 });
 
 function schoolIdentity(name: string) {
-  const slugBase = name.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 54) || "school";
-  const shortName = name.split(/\s+/).filter(Boolean).map(word => word[0]).join("").toUpperCase().slice(0, 8) || "SCHOOL";
-  return { slug: `${slugBase}-${Math.random().toString(36).slice(2, 7)}`, shortName, logoText: shortName.slice(0, 1) };
+  const words = name.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").split(/\s+/).filter(Boolean);
+  const acronymWords = words.filter(word => !["of", "the", "and", "for", "in", "at"].includes(word.toLowerCase()));
+  const shortName = (acronymWords.length ? acronymWords : words).map(word => word[0]).join("").toUpperCase().slice(0, 8) || "SCHOOL";
+  const slugBase = shortName.toLowerCase();
+  return { slug: slugBase, shortName, logoText: shortName.slice(0, 1) };
 }
 
 export async function POST(request: Request) {
@@ -56,6 +58,9 @@ export async function POST(request: Request) {
           const unavailableSchool = await tx.school.findFirst({ where: { name: { equals: normalizedSchoolName, mode: "insensitive" }, isActive: false }, select: { id: true } });
           if (unavailableSchool) throw new Error("SCHOOL_INACTIVE");
           const identity = schoolIdentity(normalizedSchoolName);
+          if (await tx.school.findUnique({ where: { slug: identity.slug }, select: { id: true } })) {
+            identity.slug = `${identity.slug}-${Math.random().toString(36).slice(2, 7)}`;
+          }
           school = await tx.school.create({ data: { name: normalizedSchoolName, ...identity, portalTitle: "SAGA Portal" } });
         }
         if (!school) throw new Error("SCHOOL_NOT_READY");

@@ -27,6 +27,7 @@ enum SchoolPlan {
 model School {
   id                   String   @id @default(cuid())
   slug                 String   @unique
+  slugAliases          String[] @default([])
   name                 String
   shortName            String
   portalTitle          String   @default("Student Grade Portal")
@@ -86,6 +87,7 @@ model User {
   auditEvents   AuditEvent[]
   passwordResetTokens PasswordResetToken[]
   emailChangeTokens EmailChangeToken[]
+  securityOtps      SecurityOtp[]
   @@unique([schoolId, email])
   @@unique([schoolId, studentNumber])
   @@index([schoolId, role])
@@ -248,4 +250,18 @@ model EmailChangeToken {
   createdAt   DateTime @default(now())
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@index([userId, expiresAt])
+}
+
+model SecurityOtp {
+  id        String   @id @default(cuid())
+  userId    String
+  purpose   String
+  target    String
+  codeHash  String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, purpose, expiresAt])
 }

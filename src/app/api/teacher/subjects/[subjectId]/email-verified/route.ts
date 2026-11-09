@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import nodemailer from "nodemailer";
 import { requireRole } from "@/lib/auth";
+import { emailDeliveryConfigured, sendPortalEmail } from "@/lib/mailer";
 import { calculateCategoryPercent, calculateFinal, equivalentFromBands } from "@/lib/grades";
 import { prisma } from "@/lib/prisma";
 
@@ -21,9 +21,7 @@ export async function POST(_request: Request, context: Context) {
   if (!subject) return NextResponse.json({ error: "Class not found." }, { status: 404 });
   if (subject.gradeStatus !== "VERIFIED") return NextResponse.json({ error: "Email is available only after the teacher finalizes the class." }, { status: 409 });
 
-  const smtpUser = process.env.GMAIL_SMTP_USER;
-  const smtpPassword = process.env.GMAIL_SMTP_APP_PASSWORD;
-  if (!smtpUser || !smtpPassword) return NextResponse.json({ error: "Gmail SMTP is not configured yet. Add GMAIL_SMTP_USER and GMAIL_SMTP_APP_PASSWORD in the Vercel production environment." }, { status: 503 });
+  if (!emailDeliveryConfigured()) return NextResponse.json({ error: "Email delivery is not configured yet. Contact the portal administrator." }, { status: 503 });
 
   const ids = subject.enrollments.map(enrollment => enrollment.studentNumber).filter((value): value is string => !!value);
   const [directory, portalAccounts] = await Promise.all([
@@ -32,7 +30,6 @@ export async function POST(_request: Request, context: Context) {
   ]);
   const directoryEmailById = new Map(directory.map(student => [student.studentNumber, student.email]));
   const portalEmailById = new Map(portalAccounts.flatMap(student => student.studentNumber ? [[student.studentNumber, student.email] as const] : []));
-  const transporter = nodemailer.createTransport({ host: "smtp.gmail.com", port: 465, secure: true, auth: { user: smtpUser, pass: smtpPassword } });
   let sent = 0;
   let skipped = 0;
   const failures: string[] = [];
@@ -84,7 +81,7 @@ export async function POST(_request: Request, context: Context) {
       "This is an informational SAGA grade notice sent by the teacher. Contact your school for official records."
     ].join("\n");
     try {
-      await transporter.sendMail({ from: smtpUser, to, subject: `Verified grade: ${subject.code} · ${subject.term} ${subject.academicYear}`, text });
+      await sendPortalEmail({ to, subject: `Verified grade: ${subject.code} · ${subject.term} ${subject.academicYear}`, text });
       sent++;
     } catch {
       failures.push(enrollment.studentNumber || enrollment.studentName);

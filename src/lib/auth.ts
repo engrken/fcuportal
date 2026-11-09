@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
+import { emailDeliveryConfigured } from "@/lib/mailer";
 
 const COOKIE = "fcu_portal_session";
 function key() {
@@ -35,7 +36,7 @@ export async function getSession() {
     return {
       ...sessionUser,
       isTenantManager: isTenantManagerEmail(user.email),
-      emailDeliveryEnabled: Boolean(process.env.GMAIL_SMTP_USER && process.env.GMAIL_SMTP_APP_PASSWORD)
+      emailDeliveryEnabled: emailDeliveryConfigured()
     };
   } catch { return null; }
 }

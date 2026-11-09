@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
-import nodemailer from "nodemailer";
 import { z } from "zod";
+import { emailDeliveryConfigured, sendPortalEmail } from "@/lib/mailer";
 import { prisma } from "@/lib/prisma";
 import { checkAuthThrottle } from "@/lib/rate-limit";
 
@@ -36,11 +36,8 @@ export async function POST(request: Request) {
     throw error;
   }
 
-  const smtpUser = process.env.GMAIL_SMTP_USER;
-  const smtpPassword = process.env.GMAIL_SMTP_APP_PASSWORD;
-  if (smtpUser && smtpPassword) {
-    const mailer = nodemailer.createTransport({ host: "smtp.gmail.com", port: 465, secure: true, auth: { user: smtpUser, pass: smtpPassword } });
-    await mailer.sendMail({ from: smtpUser, to: pending.user.email, subject: "Your SAGA sign-in email was changed", text: `The sign-in email for your SAGA account was changed to ${pending.pendingEmail}. If you did not make this change, use password recovery immediately and contact the portal administrator.` }).catch(error => console.error("Email change notification failed", error));
+  if (emailDeliveryConfigured()) {
+    await sendPortalEmail({ to: pending.user.email, subject: "Your SAGA sign-in email was changed", text: `The sign-in email for your SAGA account was changed to ${pending.pendingEmail}. If you did not make this change, use password recovery immediately and contact the portal administrator.` }).catch(error => console.error("Email change notification failed", error));
   }
 
   return NextResponse.json({ ok: true, message: "Your sign-in email has been changed." });
