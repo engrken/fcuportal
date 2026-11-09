@@ -536,7 +536,8 @@ export default function Portal({ user, initialPage = "overview" }: { user: User;
   useEffect(() => { setRosterPage(1); }, [activeId]);
   useEffect(() => { if (rosterPage > rosterPageCount) setRosterPage(rosterPageCount); }, [rosterPage, rosterPageCount]);
   const recordCategories = useMemo(() => detail ? leafCategories(detail.categories) : [], [detail]);
-  const scorebookCategories = useMemo(() => recordCategories.filter(category => !category.name.toLocaleLowerCase().includes("attendance")), [recordCategories]);
+  const scorebookItems = useMemo(() => detail?.assessments.filter(item => !item.title.toLocaleLowerCase().startsWith("attendance ·")) ?? [], [detail]);
+  const scorebookCategories = useMemo(() => recordCategories.filter(category => scorebookItems.some(item => item.categoryId === category.id)), [recordCategories, scorebookItems]);
   const scorebookGroups = useMemo(() => {
     if (!detail) return [] as Array<{ parent: Category; subcategories: Category[]; items: Assessment[] }>;
     const includedLeaves = new Set(scorebookCategories.map(category => category.id));
@@ -546,11 +547,11 @@ export default function Portal({ user, initialPage = "overview" }: { user: User;
       return children.slice().sort((a, b) => a.sortOrder - b.sortOrder).flatMap(child => descendants(child.id));
     };
     return detail.categories.filter(category => !category.parentId).slice().sort((a, b) => a.sortOrder - b.sortOrder).map(parent => {
-      const subcategories = descendants(parent.id).filter(category => detail.assessments.some(item => item.categoryId === category.id && includedLeaves.has(item.categoryId)));
-      const items = subcategories.flatMap(category => detail.assessments.filter(item => item.categoryId === category.id));
+      const subcategories = descendants(parent.id).filter(category => scorebookItems.some(item => item.categoryId === category.id && includedLeaves.has(item.categoryId)));
+      const items = subcategories.flatMap(category => scorebookItems.filter(item => item.categoryId === category.id));
       return { parent, subcategories, items };
     }).filter(group => group.items.length > 0);
-  }, [detail, scorebookCategories]);
+  }, [detail, scorebookCategories, scorebookItems]);
   // Keep assessment headers and score cells in the same hierarchical order as
   // the parent category tree.
   const scorebookAssessments = useMemo(() => scorebookGroups.flatMap(group => group.items), [scorebookGroups]);
