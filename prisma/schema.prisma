@@ -25,69 +25,72 @@ enum SchoolPlan {
 }
 
 model School {
-  id                   String   @id @default(cuid())
-  slug                 String   @unique
-  slugAliases          String[] @default([])
-  name                 String
-  shortName            String
-  portalTitle          String   @default("Student Grade Portal")
-  logoText             String   @default("S")
-  primaryColor         String   @default("#2457d6")
-  logoPath             String?
-  privacyController    String?
-  privacyContactEmail  String?
-  privacyPolicyUrl     String?
-  isActive             Boolean  @default(true)
-  plan                 SchoolPlan @default(FREE)
-  subscriptionStatus   String   @default("ACTIVE")
+  id                    String             @id @default(cuid())
+  slug                  String             @unique
+  slugAliases           String[]           @default([])
+  name                  String
+  shortName             String
+  portalTitle           String             @default("Student Grade Portal")
+  logoText              String             @default("S")
+  primaryColor          String             @default("#2457d6")
+  logoPath              String?
+  privacyController     String?
+  privacyContactEmail   String?
+  privacyPolicyUrl      String?
+  isActive              Boolean            @default(true)
+  plan                  SchoolPlan         @default(FREE)
+  subscriptionStatus    String             @default("ACTIVE")
   subscriptionExpiresAt DateTime?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-  users                User[]
-  subjects             Subject[]
-  studentDirectory     StudentDirectory[]
-  tenantPayments       TenantPayment[]
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  users                 User[]
+  subjects              Subject[]
+  studentDirectory      StudentDirectory[]
+  tenantPayments        TenantPayment[]
 }
 
 model TenantPayment {
-  id          String   @id @default(cuid())
-  schoolId    String
-  amount      Float
-  currency    String   @default("PHP")
-  method      String
-  reference   String?
-  paidAt      DateTime @default(now())
+  id           String    @id @default(cuid())
+  schoolId     String
+  amount       Float
+  currency     String    @default("PHP")
+  method       String
+  reference    String?
+  paidAt       DateTime  @default(now())
   coverageFrom DateTime?
-  coverageTo  DateTime?
-  note        String?
-  recordedBy  String
-  createdAt   DateTime @default(now())
-  school      School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  coverageTo   DateTime?
+  note         String?
+  recordedBy   String
+  createdAt    DateTime  @default(now())
+  school       School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
   @@index([schoolId, paidAt])
 }
 
 model User {
-  id            String       @id @default(cuid())
-  email         String
-  passwordHash  String
-  passwordChangedAt DateTime?
-  role          Role
-  schoolId      String
-  fullName      String
-  profileImagePath String?
-  studentNumber String?
-  courseProgram String?
-  yearLevel     String?
+  id                      String               @id @default(cuid())
+  email                   String
+  passwordHash            String
+  passwordChangedAt       DateTime?
+  role                    Role
+  schoolId                String
+  fullName                String
+  profileImagePath        String?
+  studentNumber           String?
+  courseProgram           String?
+  yearLevel               String?
   privacyNoticeAcceptedAt DateTime?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  school        School      @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  subjects      Subject[]    @relation("TeacherSubjects")
-  enrollments   Enrollment[] @relation("StudentEnrollments")
-  auditEvents   AuditEvent[]
-  passwordResetTokens PasswordResetToken[]
-  emailChangeTokens EmailChangeToken[]
-  securityOtps      SecurityOtp[]
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+  school                  School               @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  subjects                Subject[]            @relation("TeacherSubjects")
+  enrollments             Enrollment[]         @relation("StudentEnrollments")
+  auditEvents             AuditEvent[]
+  passwordResetTokens     PasswordResetToken[]
+  emailChangeTokens       EmailChangeToken[]
+  securityOtps            SecurityOtp[]
+  gradeChanges            GradeChangeHistory[] @relation("GradeChangeActor")
+
   @@unique([schoolId, email])
   @@unique([schoolId, studentNumber])
   @@index([schoolId, role])
@@ -106,12 +109,13 @@ model StudentDirectory {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   school        School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
   @@id([schoolId, studentNumber])
   @@unique([schoolId, email])
 }
 
 model Subject {
-  id           String       @id @default(cuid())
+  id           String          @id @default(cuid())
   schoolId     String
   teacherId    String
   code         String
@@ -121,80 +125,104 @@ model Subject {
   academicYear String
   schedule     String?
   courseYear   String?
-  isPublished  Boolean      @default(false)
-  gradeStatus  GradeStatus  @default(DRAFT)
+  isPublished  Boolean         @default(false)
+  gradeStatus  GradeStatus     @default(DRAFT)
   submittedAt  DateTime?
   verifiedAt   DateTime?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-  school       School       @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  teacher      User         @relation("TeacherSubjects", fields: [teacherId], references: [id], onDelete: Cascade)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  school       School          @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  teacher      User            @relation("TeacherSubjects", fields: [teacherId], references: [id], onDelete: Cascade)
   enrollments  Enrollment[]
   categories   GradeCategory[]
   gradeBands   GradeBand[]
   assessments  Assessment[]
+
+  @@unique([schoolId, classId])
   @@index([schoolId, teacherId, academicYear, term])
   @@index([schoolId, gradeStatus, submittedAt])
-  @@unique([schoolId, classId])
 }
 
 model GradeBand {
-  id          String  @id @default(cuid())
-  subjectId   String
-  minPercent  Float
-  finalGrade  String
-  remarks     String
-  sortOrder   Int     @default(0)
-  subject     Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  id         String  @id @default(cuid())
+  subjectId  String
+  minPercent Float
+  finalGrade String
+  remarks    String
+  sortOrder  Int     @default(0)
+  subject    Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
   @@unique([subjectId, finalGrade])
   @@index([subjectId, minPercent])
 }
 
 model Enrollment {
-  id            String       @id @default(cuid())
-  subjectId     String
-  studentUserId String?
-  studentName   String
-  studentNumber String?
-  remarks       String?
-  createdAt     DateTime     @default(now())
-  subject       Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  student       User?        @relation("StudentEnrollments", fields: [studentUserId], references: [id], onDelete: SetNull)
-  scores        Score[]
+  id                 String               @id @default(cuid())
+  subjectId          String
+  studentUserId      String?
+  studentName        String
+  studentNumber      String?
+  remarks            String?
+  finalGradeOverride String?
+  createdAt          DateTime             @default(now())
+  subject            Subject              @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  student            User?                @relation("StudentEnrollments", fields: [studentUserId], references: [id], onDelete: SetNull)
+  scores             Score[]
+  gradeChangeHistory GradeChangeHistory[]
+
   @@unique([subjectId, studentNumber])
   @@index([subjectId, studentName])
   @@index([studentUserId])
 }
 
+model GradeChangeHistory {
+  id                 String     @id @default(cuid())
+  enrollmentId       String
+  actorId            String
+  previousFinalGrade String?
+  previousRemarks    String?
+  newFinalGrade      String?
+  newRemarks         String?
+  reason             String
+  createdAt          DateTime   @default(now())
+  enrollment         Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  actor              User       @relation("GradeChangeActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([enrollmentId, createdAt])
+  @@index([actorId, createdAt])
+}
+
 model GradeCategory {
-  id          String      @id @default(cuid())
-  subjectId   String
-  parentId    String?
-  name        String
-  weight      Float
-  conversionBase Float    @default(50)
-  sortOrder   Int         @default(0)
-  subject     Subject     @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  parent      GradeCategory? @relation("GradeCategoryTree", fields: [parentId], references: [id], onDelete: Cascade)
-  children    GradeCategory[] @relation("GradeCategoryTree")
-  assessments Assessment[]
+  id             String          @id @default(cuid())
+  subjectId      String
+  parentId       String?
+  name           String
+  weight         Float
+  conversionBase Float           @default(50)
+  sortOrder      Int             @default(0)
+  subject        Subject         @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  parent         GradeCategory?  @relation("GradeCategoryTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children       GradeCategory[] @relation("GradeCategoryTree")
+  assessments    Assessment[]
+
   @@unique([subjectId, name])
   @@index([subjectId, parentId, sortOrder])
 }
 
 model Assessment {
-  id         String        @id @default(cuid())
-  subjectId  String
-  categoryId String
-  title      String
-  maxScore   Float
-  weight     Float?
-  dueDate    DateTime?
+  id                     String        @id @default(cuid())
+  subjectId              String
+  categoryId             String
+  title                  String
+  maxScore               Float
+  weight                 Float?
+  dueDate                DateTime?
   scheduleOverrideReason String?
-  createdAt  DateTime      @default(now())
-  subject    Subject       @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  category   GradeCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  scores     Score[]
+  createdAt              DateTime      @default(now())
+  subject                Subject       @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  category               GradeCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  scores                 Score[]
+
   @@index([subjectId, categoryId])
 }
 
@@ -206,7 +234,8 @@ model Score {
   remark       String?
   updatedAt    DateTime   @updatedAt
   enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
-  assessment  Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
   @@unique([enrollmentId, assessmentId])
 }
 
@@ -218,6 +247,7 @@ model AuditEvent {
   entityId  String
   createdAt DateTime @default(now())
   actor     User     @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
   @@index([actorId, createdAt])
 }
 
@@ -226,42 +256,46 @@ model AuthThrottle {
   attempts  Int      @default(0)
   resetAt   DateTime
   updatedAt DateTime @updatedAt
+
   @@index([resetAt])
 }
 
 model PasswordResetToken {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
-  tokenHash String   @unique
+  tokenHash String    @unique
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId, expiresAt])
 }
 
 model EmailChangeToken {
-  id          String   @id @default(cuid())
-  userId      String
+  id           String    @id @default(cuid())
+  userId       String
   pendingEmail String
-  tokenHash   String   @unique
-  expiresAt   DateTime
-  usedAt      DateTime?
-  createdAt   DateTime @default(now())
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash    String    @unique
+  expiresAt    DateTime
+  usedAt       DateTime?
+  createdAt    DateTime  @default(now())
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId, expiresAt])
 }
 
 model SecurityOtp {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
   purpose   String
   target    String
   codeHash  String
-  attempts  Int      @default(0)
+  attempts  Int       @default(0)
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId, purpose, expiresAt])
 }

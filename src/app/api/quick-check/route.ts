@@ -47,18 +47,13 @@ export async function POST(request: Request) {
     return {
       id: enrollment.id, code: subject.code, title: subject.title, term: subject.term, academicYear: subject.academicYear,
       teacher: subject.teacher.fullName, status: subject.gradeStatus, submittedAt: subject.submittedAt, verifiedAt: subject.verifiedAt,
-      percent, finalGrade: equivalent.finalGrade, remarks: enrollment.remarks || equivalent.remarks,
+      percent, finalGrade: enrollment.finalGradeOverride ?? equivalent.finalGrade, remarks: enrollment.remarks || equivalent.remarks,
       categories: subject.categories.filter(category => !subject.categories.some(child => child.parentId === category.id)).map(category => {
         const base = category.parentId ? subject.categories.find(parent => parent.id === category.parentId)?.conversionBase : category.conversionBase;
         const gradeCategory = { conversionBase: base ?? 50, assessments: category.assessments.map(item => ({ maxScore: item.maxScore, weight: item.weight, scores: item.scores.filter(score => score.enrollmentId === enrollment.id) })) };
-        let weight = category.weight;
-        let parentId = category.parentId;
-        while (parentId) {
-          const parent = subject.categories.find(item => item.id === parentId);
-          if (!parent) break;
-          weight *= parent.weight / 100;
-          parentId = parent.parentId;
-        }
+        let root = category;
+        while (root.parentId) { const parent = subject.categories.find(item => item.id === root.parentId); if (!parent) break; root = parent; }
+        const weight = category.id === root.id ? root.weight : root.weight * category.weight / 100;
         return { name: pathFor(category.id), weight, percent: calculateCategoryPercent(gradeCategory) };
       })
     };

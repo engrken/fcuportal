@@ -8,7 +8,12 @@ import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
 
 type Context = { params: Promise<{ subjectId: string }> };
 async function ownedSubject(subjectId: string, teacherId: string, schoolId: string) {
-  return prisma.subject.findFirst({ where: { id: subjectId, teacherId, schoolId }, include: { categories: { orderBy: { sortOrder: "asc" } }, gradeBands: { orderBy: { sortOrder: "asc" } }, assessments: { orderBy: { createdAt: "asc" } }, enrollments: { orderBy: { studentName: "asc" }, include: { scores: true } } } });
+  return prisma.subject.findFirst({ where: { id: subjectId, teacherId, schoolId }, include: { categories: { orderBy: { sortOrder: "asc" } }, gradeBands: { orderBy: { sortOrder: "asc" } }, assessments: { orderBy: { createdAt: "asc" } }, enrollments: { orderBy: { studentName: "asc" }, include: { scores: true, gradeChangeHistory: { orderBy: { createdAt: "desc" }, include: { actor: { select: { fullName: true } } } } } } } });
+}
+function expectedChildAllocation(parentId: string | null, categories: Array<{ id: string; parentId?: string | null; weight: number }>) {
+  if (!parentId) return 100;
+  const parent = categories.find(category => category.id === parentId);
+  return parent?.parentId ? parent.weight : 100;
 }
 export async function GET(_request: Request, context: Context) {
   const teacher = await requireRole("TEACHER"); if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -25,6 +30,7 @@ const enrollmentUpdateSchema = z.object({ updateEnrollment: z.object({ enrollmen
 const assessmentSchema = z.object({ categoryId: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), weight: z.number().min(0).max(100).nullable().optional(), dueDate: z.string().optional(), scheduleOverrideReason: z.string().trim().max(120).optional() });
 const assessmentUpdatesSchema = z.object({ assessmentItems: z.array(z.object({ id: z.string(), categoryId: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), weight: z.number().min(0).max(100).nullable(), dueDate: z.string().nullable().optional(), scheduleOverrideReason: z.string().trim().max(120).nullable().optional() })).min(1).max(200) });
 const remarkSchema = z.object({ enrollmentId: z.string(), remark: z.enum(["INC", "NP", "DROPPED"]).nullable() });
+const gradeChangeSchema = z.object({ gradeChange: z.object({ enrollmentId: z.string(), finalGrade: z.string().trim().min(1).max(12), remarks: z.string().trim().max(40), reason: z.string().trim().min(10).max(500) }) });
 const copyGradingSchema = z.object({ copyGradingFromSubjectId: z.string() });
 const bandsSchema = z.object({ gradeBands: z.array(z.object({ id: z.string().optional(), minPercent: z.number().min(0).max(100), finalGrade: z.string().trim().min(1).max(12), remarks: z.string().trim().min(1).max(40) })).min(2).max(30) });
 const subjectDetailsSchema = z.object({ updateSubject: z.object({ classId: z.string().trim().min(1).max(40), code: z.string().trim().min(1).max(30), title: z.string().trim().min(2).max(160), term: z.string().trim().min(1).max(40), academicYear: z.string().trim().min(4).max(20), schedule: z.string().trim().max(4000).nullable(), courseYear: z.string().trim().max(80).nullable() }) });
@@ -33,6 +39,32 @@ export async function PATCH(request: Request, context: Context) {
   const { subjectId } = await context.params; const subject = await ownedSubject(subjectId, teacher.id, teacher.schoolId);
   if (!subject) return NextResponse.json({ error: "Subject not found" }, { status: 404 });
   const input = await request.json();
+  if ("gradeChange" in input) {
+    if (subject.gradeStatus !== "VERIFIED") return NextResponse.json({ error: "Grade changes are available after this class is verified to the Registrar." }, { status: 409 });
+    const parsed = gradeChangeSchema.safeParse(input);
+    if (!parsed.success) return NextResponse.json({ error: "Choose a valid grade and remark, and enter a reason of at least 10 characters." }, { status: 400 });
+    const change = parsed.data.gradeChange;
+    const enrollment = subject.enrollments.find(item => item.id === change.enrollmentId);
+    if (!enrollment) return NextResponse.json({ error: "Student roster record not found in this class." }, { status: 404 });
+    const allowedGrades = new Set(["AUTO", ...subject.gradeBands.map(band => band.finalGrade)]);
+    const allowedRemarks = new Set(["AUTO", "Passed", "Failed", "INC", "NP", "DROPPED"]);
+    if (!allowedGrades.has(change.finalGrade) || !allowedRemarks.has(change.remarks)) return NextResponse.json({ error: "Choose a grade and remark from this class's grading scale." }, { status: 400 });
+    const calculatedPercent = calculateFinal(subject.categories.map(category => ({ id: category.id, parentId: category.parentId, weight: category.weight, conversionBase: category.conversionBase, assessments: subject.assessments.filter(item => item.categoryId === category.id).map(item => ({ maxScore: item.maxScore, weight: item.weight, scores: enrollment.scores.filter(score => score.assessmentId === item.id) })) })));
+    const automatic = equivalentFromBands(calculatedPercent, subject.gradeBands);
+    const previousFinalGrade = enrollment.finalGradeOverride ?? automatic.finalGrade;
+    const previousRemarks = enrollment.remarks ?? automatic.remarks;
+    const finalGradeOverride = change.finalGrade === "AUTO" ? null : change.finalGrade;
+    const remarks = change.remarks === "AUTO" ? null : change.remarks;
+    const nextFinalGrade = finalGradeOverride ?? automatic.finalGrade;
+    const nextRemarks = remarks ?? automatic.remarks;
+    if (previousFinalGrade === nextFinalGrade && previousRemarks === nextRemarks) return NextResponse.json({ error: "The selected grade and remark match the current record." }, { status: 400 });
+    await prisma.$transaction(async tx => {
+      await tx.enrollment.update({ where: { id: enrollment.id }, data: { finalGradeOverride, remarks } });
+      await tx.gradeChangeHistory.create({ data: { enrollmentId: enrollment.id, actorId: teacher.id, previousFinalGrade, previousRemarks, newFinalGrade: nextFinalGrade, newRemarks: nextRemarks, reason: change.reason } });
+      await tx.auditEvent.create({ data: { actorId: teacher.id, action: `changed verified grade from ${previousFinalGrade ?? "—"} to ${nextFinalGrade ?? "—"}: ${change.reason}`, entity: "enrollment", entityId: enrollment.id } });
+    });
+    return NextResponse.json({ ok: true });
+  }
   if ("recallGrades" in input) {
     if (input.recallGrades !== true) return NextResponse.json({ error: "Confirm recall of the submitted grades." }, { status: 400 });
     if (subject.gradeStatus === "DRAFT") return NextResponse.json({ error: "This class has no submitted grades to recall." }, { status: 409 });
@@ -67,8 +99,13 @@ export async function PATCH(request: Request, context: Context) {
     const parents = new Set(subject.categories.map(category => category.parentId ?? "root"));
     for (const parentKey of parents) {
       const siblings = subject.categories.filter(category => (category.parentId ?? "root") === parentKey);
-      const expected = 100;
-      if (Math.abs(siblings.reduce((sum, category) => sum + category.weight, 0) - expected) > 0.01) return NextResponse.json({ error: `${parentKey === "root" ? "Overall course groups" : "Categories within each parent"} must total ${expected}% before submission.` }, { status: 400 });
+      const parentId = parentKey === "root" ? null : parentKey;
+      const expected = expectedChildAllocation(parentId, subject.categories);
+      const total = siblings.reduce((sum, category) => sum + category.weight, 0);
+      if (Math.abs(total - expected) > 0.01) {
+        const parentName = parentId ? subject.categories.find(category => category.id === parentId)?.name : "Overall course groups";
+        return NextResponse.json({ error: `${parentName} allocations total ${total.toFixed(2)}%; they must total ${expected}% before submission. Check the subcategories directly under that parent.` }, { status: 400 });
+      }
     }
     const leaves = subject.categories.filter(category => !subject.categories.some(child => child.parentId === category.id));
     for (const category of leaves) {
@@ -167,6 +204,7 @@ export async function PATCH(request: Request, context: Context) {
       if (isLab && /\b(?:exam|examination|test|practical)\b/.test(label)) key = "laboratory-exam";
       else if (isLab && /\b(?:exercise|activity|activities)\b/.test(label)) key = "laboratory-exercise";
       else if (isLab && /\b(?:mid\s*term|finals?)\b/.test(label)) key = "laboratory-exam";
+      else if (/\bprelim(?:inary)?\b/.test(label)) key = "prelim";
       else if (/\bmid\s*term\b/.test(label)) key = "midterm";
       else if (/\bfinals?\b/.test(label)) key = "finals";
       else if (/self evaluation|self eval/.test(label)) key = "self-evaluation";
@@ -279,8 +317,12 @@ export async function PATCH(request: Request, context: Context) {
     for (const parentKey of parents) {
       const siblings = values.filter(category => (category.parentId ?? "root") === parentKey);
       const total = siblings.reduce((sum, category) => sum + category.weight, 0);
-      const expected = 100;
-      if (Math.abs(total - expected) > 0.01) return NextResponse.json({ error: `${parentKey === "root" ? "Course group" : "Child category"} weights must total ${expected}%.` }, { status: 400 });
+      const parentId = parentKey === "root" ? null : parentKey;
+      const expected = expectedChildAllocation(parentId, values);
+      if (Math.abs(total - expected) > 0.01) {
+        const parentName = parentId ? values.find(category => category.id === parentId)?.name || "Parent category" : "Overall course groups";
+        return NextResponse.json({ error: `${parentName} allocations total ${total.toFixed(2)}%; they must total ${expected}%. Check the subcategories directly under that parent.` }, { status: 400 });
+      }
     }
     for (const category of values) {
       const existing = subject.categories.find(c => c.id === category.id)!;
@@ -306,7 +348,7 @@ export async function POST(request: Request, context: Context) {
     if (parentId && subject.assessments.some(assessment => assessment.categoryId === parentId)) return NextResponse.json({ error: "Move assessment items out of this category before adding subcategories." }, { status: 409 });
     const siblings = subject.categories.filter(category => (category.parentId ?? null) === parentId);
     if (subject.categories.some(category => category.name.toLocaleLowerCase() === parsed.data.name.toLocaleLowerCase())) return NextResponse.json({ error: "A category with that name already exists in this class." }, { status: 409 });
-    const expected = 100;
+    const expected = expectedChildAllocation(parentId, subject.categories);
     const allocated = siblings.reduce((sum, category) => sum + category.weight, 0);
     const requested = parsed.data.weight ?? Math.max(0, expected - allocated);
     if (requested > expected - allocated + 0.01) return NextResponse.json({ error: `Only ${(expected - allocated).toFixed(2)}% remains ${parentId ? "within this parent" : "in the course total"}.` }, { status: 400 });

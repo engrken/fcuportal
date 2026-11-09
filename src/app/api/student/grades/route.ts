@@ -45,17 +45,12 @@ export async function GET() {
     };
     const leafCategories = subject.categories.filter(category => !subject.categories.some(child => child.parentId === category.id));
     const categories = leafCategories.map(category => {
-      let weight = category.weight;
-      let parentId = category.parentId;
-      while (parentId) {
-        const parent = subject.categories.find(item => item.id === parentId);
-        if (!parent) break;
-        weight *= parent.weight / 100;
-        parentId = parent.parentId;
-      }
+      let root = category;
+      while (root.parentId) { const parent = subject.categories.find(item => item.id === root.parentId); if (!parent) break; root = parent; }
+      const weight = category.id === root.id ? root.weight : root.weight * category.weight / 100;
       return { name: pathFor(category.id), weight, assessments: category.assessments.map(item => ({ id: item.id, title: item.title, points: item.scores[0]?.points ?? null, remark: item.scores[0]?.remark ?? null, maxScore: item.maxScore, weight: item.weight, dueDate: item.dueDate })) };
     });
-    return { id: enrollment.id, code: subject.code, title: subject.title, term: subject.term, academicYear: subject.academicYear, teacher: subject.teacher.fullName, status: subject.gradeStatus, submittedAt: subject.submittedAt, verifiedAt: subject.verifiedAt, percent, finalGrade: equivalent.finalGrade, remarks: enrollment.remarks || equivalent.remarks, categories };
+    return { id: enrollment.id, code: subject.code, title: subject.title, term: subject.term, academicYear: subject.academicYear, teacher: subject.teacher.fullName, status: subject.gradeStatus, submittedAt: subject.submittedAt, verifiedAt: subject.verifiedAt, percent, finalGrade: enrollment.finalGradeOverride ?? equivalent.finalGrade, remarks: enrollment.remarks || equivalent.remarks, categories };
   });
   return NextResponse.json({ grades });
 }

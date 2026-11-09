@@ -57,14 +57,9 @@ export async function POST(_request: Request, context: Context) {
         conversionBase: base ?? 50,
         assessments: category.assessments.map(item => ({ maxScore: item.maxScore, weight: item.weight, scores: item.scores.filter(value => value.enrollmentId === enrollment.id) }))
       });
-      let weight = category.weight;
-      let parentId = category.parentId;
-      while (parentId) {
-        const parent = subject.categories.find(item => item.id === parentId);
-        if (!parent) break;
-        weight *= parent.weight / 100;
-        parentId = parent.parentId;
-      }
+      let root = category;
+      while (root.parentId) { const parent = subject.categories.find(item => item.id === root.parentId); if (!parent) break; root = parent; }
+      const weight = category.id === root.id ? root.weight : root.weight * category.weight / 100;
       return `- ${category.name} (${weight.toFixed(2)}% of course): ${score == null ? "Not graded" : score.toFixed(2) + "%"}`;
     });
     const text = [
@@ -75,7 +70,7 @@ export async function POST(_request: Request, context: Context) {
       ...parts,
       "",
       `Total course grade: ${percent == null ? "—" : percent.toFixed(2) + "%"}`,
-      `Final grade: ${equivalent.finalGrade ?? "—"}`,
+      `Final grade: ${enrollment.finalGradeOverride ?? equivalent.finalGrade ?? "—"}`,
       `Remarks: ${enrollment.remarks || equivalent.remarks}`,
       "",
       "This is an informational SAGA grade notice sent by the teacher. Contact your school for official records."

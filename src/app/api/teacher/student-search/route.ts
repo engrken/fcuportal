@@ -89,7 +89,7 @@ export async function GET(request: Request) {
         status: subject.gradeStatus
       },
       finalPercent: percent,
-      finalGrade: equivalent.finalGrade,
+      finalGrade: enrollment.finalGradeOverride ?? equivalent.finalGrade,
       finalRemark: enrollment.remarks || equivalent.remarks,
       records: subject.assessments.map(item => {
         const score = enrollment.scores.find(value => value.assessmentId === item.id);
