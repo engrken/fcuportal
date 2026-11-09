@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { scheduleWeekdays } from "@/lib/schedule-days";
 
 function parseDate(value: string | null) {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
@@ -12,6 +13,15 @@ function nextDay(date: Date) {
   const next = new Date(date);
   next.setUTCDate(next.getUTCDate() + 1);
   return next;
+}
+
+function scheduleForWeekday(raw: string | null, weekday: number) {
+  if (!raw?.trim()) return [] as string[];
+  try {
+    const rows = JSON.parse(raw) as Array<{ label?: string; day?: string; startTime?: string; endTime?: string }>;
+    if (Array.isArray(rows)) return rows.filter(row => scheduleWeekdays(JSON.stringify([row])).includes(weekday)).map(row => `${row.label || "Class"}${row.startTime || row.endTime ? ` · ${row.startTime || ""}${row.startTime && row.endTime ? "–" : ""}${row.endTime || ""}` : ""}`);
+  } catch { /* Legacy free-text schedules are checked by scheduleWeekdays below. */ }
+  return scheduleWeekdays(raw).includes(weekday) ? [raw] : [];
 }
 
 export async function GET(request: Request) {
@@ -31,7 +41,7 @@ export async function GET(request: Request) {
     prisma.subject.findMany({
       where: subjectScope,
       select: {
-        id: true, code: true, title: true, classId: true, gradeStatus: true,
+        id: true, code: true, title: true, classId: true, gradeStatus: true, schedule: true,
         enrollments: { select: { studentUserId: true, studentNumber: true, studentName: true } },
         assessments: {
           where: { dueDate: { gte: from, lt: rangeEnd } },
@@ -94,6 +104,18 @@ export async function GET(request: Request) {
     code: item.subject.code,
     subjectTitle: item.subject.title
   }));
+  const todayWeekday = today.getUTCDay();
+  const todayClasses = subjects.flatMap(subject => {
+    const sessions = scheduleForWeekday(subject.schedule, todayWeekday);
+    return sessions.length ? [{
+      id: subject.id,
+      code: subject.code,
+      title: subject.title,
+      classId: subject.classId,
+      schedule: sessions,
+      canRecordAttendance: subject.gradeStatus !== "VERIFIED"
+    }] : [];
+  });
 
   return NextResponse.json({
     stats: {
@@ -107,6 +129,8 @@ export async function GET(request: Request) {
     attendance: { present, absent, excused },
     submissions,
     enrollment: subjects.map(subject => ({ id: subject.id, label: subject.classId || subject.code, title: subject.title, code: subject.code, count: subject.enrollments.length })),
+    today: manilaDate,
+    todayClasses,
     upcoming: { attendance: upcoming(upcomingAttendance), assessments: upcoming(upcomingAssessments) }
   });
 }
