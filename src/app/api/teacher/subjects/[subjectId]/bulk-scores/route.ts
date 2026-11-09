@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@/generated/prisma/client";
 
 type Context = { params: Promise<{ subjectId: string }> };
 const batchSchema = z.object({
@@ -38,15 +40,27 @@ export async function POST(request: Request, context: Context) {
     if (entry.points !== null && entry.points > assessment.maxScore) return NextResponse.json({ error: `A score exceeds the maximum of ${assessment.maxScore} for ${assessment.title}.` }, { status: 400 });
     if (entry.remark && entry.points !== null) return NextResponse.json({ error: "Each imported cell must contain either a score or a status, not both." }, { status: 400 });
   }
-  await prisma.$transaction(async tx => {
-    for (const entry of parsed.data.scores) {
-      await tx.score.upsert({
-        where: { enrollmentId_assessmentId: { enrollmentId: entry.enrollmentId, assessmentId: entry.assessmentId } },
-        create: entry,
-        update: { points: entry.points, remark: entry.remark }
-      });
-    }
-    await tx.auditEvent.create({ data: { actorId: teacher.id, action: `bulk imported ${parsed.data.scores.length} score cell(s)`, entity: "subject", entityId: subjectId } });
-  });
+  try {
+    await prisma.$transaction(async tx => {
+      // A single SQL upsert per chunk avoids the 5-second interactive transaction
+      // timeout caused by issuing one Prisma upsert per imported cell.
+      for (let offset = 0; offset < parsed.data.scores.length; offset += 500) {
+        const chunk = parsed.data.scores.slice(offset, offset + 500);
+        const values = chunk.map(entry => Prisma.sql`(${randomUUID()}, ${entry.enrollmentId}, ${entry.assessmentId}, ${entry.points}, ${entry.remark}, CURRENT_TIMESTAMP)`);
+        await tx.$executeRaw(Prisma.sql`
+          INSERT INTO "Score" ("id", "enrollmentId", "assessmentId", "points", "remark", "updatedAt")
+          VALUES ${Prisma.join(values)}
+          ON CONFLICT ("enrollmentId", "assessmentId") DO UPDATE SET
+            "points" = EXCLUDED."points",
+            "remark" = EXCLUDED."remark",
+            "updatedAt" = CURRENT_TIMESTAMP
+        `);
+      }
+      await tx.auditEvent.create({ data: { actorId: teacher.id, action: `bulk imported ${parsed.data.scores.length} score cell(s)`, entity: "subject", entityId: subjectId } });
+    }, { timeout: 20000 });
+  } catch (error) {
+    console.error("Bulk score import failed", error);
+    return NextResponse.json({ error: "The score batch could not be saved. No changes were kept; retry the import, or split a very large file into smaller batches." }, { status: 500 });
+  }
   return NextResponse.json({ ok: true, updated: parsed.data.scores.length });
 }
