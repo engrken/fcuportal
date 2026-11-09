@@ -330,6 +330,7 @@ export default function Portal({ user }: { user: User }) {
   useEffect(() => { if (!printMode) return; const timer = window.setTimeout(() => window.print(), 120); const afterPrint = () => setPrintMode(null); window.addEventListener("afterprint", afterPrint); return () => { window.clearTimeout(timer); window.removeEventListener("afterprint", afterPrint); }; }, [printMode]);
   async function logout() { await fetch("/api/auth/logout", { method: "POST" }); router.replace("/login"); router.refresh(); }
   function toggleClassNav() {
+    setTab("classes");
     if (sidebarCollapsed) {
       setSidebarCollapsed(false);
       window.localStorage.setItem("saga-sidebar-collapsed", "false");
