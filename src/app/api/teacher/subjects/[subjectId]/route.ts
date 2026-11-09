@@ -67,8 +67,8 @@ export async function PATCH(request: Request, context: Context) {
     const parents = new Set(subject.categories.map(category => category.parentId ?? "root"));
     for (const parentKey of parents) {
       const siblings = subject.categories.filter(category => (category.parentId ?? "root") === parentKey);
-      const expected = parentKey === "root" ? 100 : subject.categories.find(category => category.id === parentKey)?.weight ?? 0;
-      if (Math.abs(siblings.reduce((sum, category) => sum + category.weight, 0) - expected) > 0.01) return NextResponse.json({ error: `${parentKey === "root" ? "Overall" : "Subcategory"} weights must total ${expected}% before submission.` }, { status: 400 });
+      const expected = 100;
+      if (Math.abs(siblings.reduce((sum, category) => sum + category.weight, 0) - expected) > 0.01) return NextResponse.json({ error: `${parentKey === "root" ? "Overall course groups" : "Categories within each parent"} must total ${expected}% before submission.` }, { status: 400 });
     }
     const leaves = subject.categories.filter(category => !subject.categories.some(child => child.parentId === category.id));
     for (const category of leaves) {
@@ -264,7 +264,7 @@ export async function PATCH(request: Request, context: Context) {
     for (const parentKey of parents) {
       const siblings = values.filter(category => (category.parentId ?? "root") === parentKey);
       const total = siblings.reduce((sum, category) => sum + category.weight, 0);
-      const expected = parentKey === "root" ? 100 : byId.get(parentKey)?.weight ?? 0;
+      const expected = 100;
       if (Math.abs(total - expected) > 0.01) return NextResponse.json({ error: `${parentKey === "root" ? "Course group" : "Child category"} weights must total ${expected}%.` }, { status: 400 });
     }
     for (const category of values) {
@@ -291,10 +291,10 @@ export async function POST(request: Request, context: Context) {
     if (parentId && subject.assessments.some(assessment => assessment.categoryId === parentId)) return NextResponse.json({ error: "Move assessment items out of this category before adding subcategories." }, { status: 409 });
     const siblings = subject.categories.filter(category => (category.parentId ?? null) === parentId);
     if (subject.categories.some(category => category.name.toLocaleLowerCase() === parsed.data.name.toLocaleLowerCase())) return NextResponse.json({ error: "A category with that name already exists in this class." }, { status: 409 });
-    const expected = parentId ? subject.categories.find(category => category.id === parentId)?.weight ?? 0 : 100;
+    const expected = 100;
     const allocated = siblings.reduce((sum, category) => sum + category.weight, 0);
     const requested = parsed.data.weight ?? Math.max(0, expected - allocated);
-    if (requested > expected - allocated + 0.01) return NextResponse.json({ error: `Only ${(expected - allocated).toFixed(2)}% remains under this ${parentId ? "parent" : "course"}.` }, { status: 400 });
+    if (requested > expected - allocated + 0.01) return NextResponse.json({ error: `Only ${(expected - allocated).toFixed(2)}% remains ${parentId ? "within this parent" : "in the course total"}.` }, { status: 400 });
     const parentBase = parentId ? subject.categories.find(item => item.id === parentId)?.conversionBase ?? 50 : 50;
     const category = await prisma.gradeCategory.create({ data: { subjectId, parentId, name: parsed.data.name, weight: requested, conversionBase: parsed.data.conversionBase ?? parentBase, sortOrder: siblings.length } });
     await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "created grading category", entity: "grade-category", entityId: category.id } });

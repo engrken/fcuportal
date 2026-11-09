@@ -8,18 +8,18 @@ export const SAMPLE_CATEGORIES: GradeCategoryInput[] = [
   { name: "Attendance, Recitation & Participation", weight: 10, conversionBase: 50 }
 ];
 
-/** Default FCU engineering lecture/laboratory grading tree, in course-percent units. */
+/** Default grading tree. Child weights are percentages within their parent. */
 export const LECTURE_LAB_GRADING_TEMPLATE = [
   { key: "lecture", parentKey: null, name: "Lecture", weight: 60 },
-  { key: "major-examinations", parentKey: "lecture", name: "Major Examinations", weight: 30 },
-  { key: "midterm", parentKey: "major-examinations", name: "Midterm", weight: 12 },
-  { key: "finals", parentKey: "major-examinations", name: "Finals", weight: 18 },
-  { key: "self-evaluation", parentKey: "lecture", name: "Self-Evaluation Exercises", weight: 15 },
-  { key: "quizzes-assignments", parentKey: "lecture", name: "Quizzes/Assignments", weight: 9 },
-  { key: "attendance-participation", parentKey: "lecture", name: "Attendance/Class Participation", weight: 6 },
+  { key: "major-examinations", parentKey: "lecture", name: "Major Examinations", weight: 50 },
+  { key: "midterm", parentKey: "major-examinations", name: "Midterm", weight: 40 },
+  { key: "finals", parentKey: "major-examinations", name: "Finals", weight: 60 },
+  { key: "self-evaluation", parentKey: "lecture", name: "Self-Evaluation Exercises", weight: 25 },
+  { key: "quizzes-assignments", parentKey: "lecture", name: "Quizzes/Assignments", weight: 15 },
+  { key: "attendance-participation", parentKey: "lecture", name: "Attendance/Class Participation", weight: 10 },
   { key: "laboratory", parentKey: null, name: "Laboratory", weight: 40 },
-  { key: "laboratory-exam", parentKey: "laboratory", name: "Laboratory Exam (Written/Practical)", weight: 20 },
-  { key: "laboratory-exercise", parentKey: "laboratory", name: "Laboratory Exercise", weight: 20 }
+  { key: "laboratory-exam", parentKey: "laboratory", name: "Laboratory Exam (Written/Practical)", weight: 50 },
+  { key: "laboratory-exercise", parentKey: "laboratory", name: "Laboratory Exercise", weight: 50 }
 ] as const;
 
 export const SAMPLE_GRADE_BANDS = [
@@ -76,17 +76,18 @@ export function calculateFinal(categories: GradeCalculationCategory[]) {
     childrenByParent.set(parentId, siblings);
   }
 
-  const calculateContribution = (category: GradeCalculationCategory, path = new Set<string>()): number | null => {
+  const calculateContribution = (category: GradeCalculationCategory, parentShare = 1, path = new Set<string>()): number | null => {
     if (path.has(category.id)) return null;
     const nextPath = new Set(path).add(category.id);
     const children = childrenByParent.get(category.id) ?? [];
+    const share = parentShare * category.weight / 100;
     if (children.length) {
-      return children.reduce((sum, child) => sum + (calculateContribution(child, nextPath) ?? 0), 0);
+      return children.reduce((sum, child) => sum + (calculateContribution(child, share, nextPath) ?? 0), 0);
     }
     if (!category.assessments.length) return 0;
     const base = category.parentId ? categoriesById.get(category.parentId)?.conversionBase : category.conversionBase;
     const percent = calculateCategoryPercent({ conversionBase: base ?? 50, assessments: category.assessments });
-    return percent === null ? null : percent * category.weight / 100;
+    return percent === null ? null : percent * share;
   };
 
   const result = (childrenByParent.get(null) ?? []).reduce((sum, category) => sum + (calculateContribution(category) ?? 0), 0);

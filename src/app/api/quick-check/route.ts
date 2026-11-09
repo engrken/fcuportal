@@ -51,7 +51,15 @@ export async function POST(request: Request) {
       categories: subject.categories.filter(category => !subject.categories.some(child => child.parentId === category.id)).map(category => {
         const base = category.parentId ? subject.categories.find(parent => parent.id === category.parentId)?.conversionBase : category.conversionBase;
         const gradeCategory = { conversionBase: base ?? 50, assessments: category.assessments.map(item => ({ maxScore: item.maxScore, weight: item.weight, scores: item.scores.filter(score => score.enrollmentId === enrollment.id) })) };
-        return { name: pathFor(category.id), weight: category.weight, percent: calculateCategoryPercent(gradeCategory) };
+        let weight = category.weight;
+        let parentId = category.parentId;
+        while (parentId) {
+          const parent = subject.categories.find(item => item.id === parentId);
+          if (!parent) break;
+          weight *= parent.weight / 100;
+          parentId = parent.parentId;
+        }
+        return { name: pathFor(category.id), weight, percent: calculateCategoryPercent(gradeCategory) };
       })
     };
   });
