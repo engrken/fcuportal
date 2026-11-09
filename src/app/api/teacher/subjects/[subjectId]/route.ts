@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { calculateCategoryPercent, calculateFinal, equivalentFromBands, LECTURE_LAB_GRADING_TEMPLATE } from "@/lib/grades";
+import { calculateCategoryPercent, calculateFinal, equivalentFromBands, LECTURE_LAB_GRADING_TEMPLATE, LECTURE_ONLY_GRADING_TEMPLATE } from "@/lib/grades";
 import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
 
 type Context = { params: Promise<{ subjectId: string }> };
@@ -137,8 +137,19 @@ export async function PATCH(request: Request, context: Context) {
     });
     return NextResponse.json({ ok: true });
   }
-  if (input.gradingTemplate === "LECTURE_LAB_60_40") {
+  if (["LECTURE_ONLY", "LECTURE_LAB" , "LECTURE_LAB_60_40"].includes(input.gradingTemplate)) {
     if (subject.gradeStatus !== "DRAFT") return NextResponse.json({ error: "Recall this class to draft before changing its grading structure." }, { status: 409 });
+    const lectureOnly = input.gradingTemplate === "LECTURE_ONLY";
+    const legacyTemplate = input.gradingTemplate === "LECTURE_LAB_60_40";
+    const lectureWeight = lectureOnly ? 100 : input.lectureWeight ?? (legacyTemplate ? 60 : undefined);
+    const laboratoryWeight = lectureOnly ? 0 : input.laboratoryWeight ?? (legacyTemplate ? 40 : undefined);
+    if (typeof lectureWeight !== "number" || typeof laboratoryWeight !== "number" || (lectureOnly ? lectureWeight !== 100 : lectureWeight < 1 || laboratoryWeight < 1 || Math.abs(lectureWeight + laboratoryWeight - 100) > 0.01)) {
+      return NextResponse.json({ error: "Enter Lecture and Laboratory weights that total exactly 100%." }, { status: 400 });
+    }
+    const template = (lectureOnly ? LECTURE_ONLY_GRADING_TEMPLATE : LECTURE_LAB_GRADING_TEMPLATE).map(category => ({
+      ...category,
+      weight: category.key === "lecture" ? lectureWeight : category.key === "laboratory" ? laboratoryWeight : category.weight
+    }));
     const categoryById = new Map(subject.categories.map(category => [category.id, category]));
     const categoryPathFor = (categoryId: string) => {
       const path: string[] = [];
@@ -161,14 +172,15 @@ export async function PATCH(request: Request, context: Context) {
       else if (/\battendance\b|\bparticipation\b/.test(label)) key = "attendance-participation";
       return { assessmentId: item.id, title: item.title, key };
     });
-    const unmapped = remap.filter(item => !item.key);
+    const templateKeys = new Set<string>(template.map(category => category.key));
+    const unmapped = remap.filter(item => !item.key || !templateKeys.has(item.key));
     if (unmapped.length) return NextResponse.json({ error: `Could not safely place these assessment items: ${unmapped.map(item => item.title).join(", ")}. Rename or move them to a clear grading category first; no changes were made.` }, { status: 409 });
     await prisma.$transaction(async tx => {
       const oldCategoryIds = subject.categories.map(category => category.id);
       for (const category of subject.categories) await tx.gradeCategory.update({ where: { id: category.id }, data: { name: `__template_replaced_${category.id}` } });
       const categoryIds = new Map<string, string>();
       const siblingOrder = new Map<string, number>();
-      for (const category of LECTURE_LAB_GRADING_TEMPLATE) {
+      for (const category of template) {
         const parentId = category.parentKey ? categoryIds.get(category.parentKey) : null;
         if (category.parentKey && !parentId) throw new Error(`Missing template parent: ${category.parentKey}`);
         const siblingKey = category.parentKey ?? "root";
@@ -183,7 +195,7 @@ export async function PATCH(request: Request, context: Context) {
         await tx.assessment.update({ where: { id: item.assessmentId }, data: { categoryId } });
       }
       if (oldCategoryIds.length) await tx.gradeCategory.deleteMany({ where: { subjectId, id: { in: oldCategoryIds } } });
-      await tx.auditEvent.create({ data: { actorId: teacher.id, action: "applied lecture/laboratory 60/40 grading template", entity: "subject", entityId: subjectId } });
+      await tx.auditEvent.create({ data: { actorId: teacher.id, action: lectureOnly ? "applied lecture-only grading template" : `applied Lecture ${lectureWeight}% / Laboratory ${laboratoryWeight}% grading template`, entity: "subject", entityId: subjectId } });
     });
     return NextResponse.json({ ok: true });
   }
