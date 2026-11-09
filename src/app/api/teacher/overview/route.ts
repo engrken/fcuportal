@@ -31,7 +31,7 @@ export async function GET(request: Request) {
     prisma.subject.findMany({
       where: subjectScope,
       select: {
-        id: true, code: true, title: true, courseYear: true, gradeStatus: true,
+        id: true, code: true, title: true, classId: true, gradeStatus: true,
         enrollments: { select: { studentUserId: true, studentNumber: true, studentName: true } },
         assessments: {
           where: { dueDate: { gte: from, lt: rangeEnd } },
@@ -106,7 +106,7 @@ export async function GET(request: Request) {
     },
     attendance: { present, absent, excused },
     submissions,
-    enrollment: subjects.map(subject => ({ id: subject.id, label: subject.courseYear || subject.code, title: subject.title, code: subject.code, count: subject.enrollments.length })),
+    enrollment: subjects.map(subject => ({ id: subject.id, label: subject.classId || subject.code, title: subject.title, code: subject.code, count: subject.enrollments.length })),
     upcoming: { attendance: upcoming(upcomingAttendance), assessments: upcoming(upcomingAssessments) }
   });
 }
