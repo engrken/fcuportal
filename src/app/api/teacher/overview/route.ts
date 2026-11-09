@@ -1,0 +1,112 @@
+import { NextResponse } from "next/server";
+import { requireRole } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+
+function parseDate(value: string | null) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value ? null : date;
+}
+
+function nextDay(date: Date) {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return next;
+}
+
+export async function GET(request: Request) {
+  const teacher = await requireRole("TEACHER");
+  if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const params = new URL(request.url).searchParams;
+  const from = parseDate(params.get("from"));
+  const to = parseDate(params.get("to"));
+  if (!from || !to || from > to) return NextResponse.json({ error: "Choose a valid date range." }, { status: 400 });
+  const rangeEnd = nextDay(to);
+  const manilaDate = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const today = new Date(`${manilaDate}T00:00:00.000Z`);
+  const subjectScope = { teacherId: teacher.id, schoolId: teacher.schoolId };
+
+  const [subjects, upcomingAttendance, upcomingAssessments] = await Promise.all([
+    prisma.subject.findMany({
+      where: subjectScope,
+      select: {
+        id: true, code: true, title: true, courseYear: true, gradeStatus: true,
+        enrollments: { select: { studentUserId: true, studentNumber: true, studentName: true } },
+        assessments: {
+          where: { dueDate: { gte: from, lt: rangeEnd } },
+          select: {
+            id: true, title: true, dueDate: true,
+            category: { select: { name: true } },
+            scores: { select: { points: true, remark: true } }
+          }
+        }
+      }
+    }),
+    prisma.assessment.findMany({
+      where: { subject: subjectScope, title: { startsWith: "Attendance ·" }, dueDate: { gte: today } },
+      orderBy: { dueDate: "asc" }, take: 8,
+      select: { id: true, title: true, dueDate: true, subject: { select: { id: true, code: true, title: true } } }
+    }),
+    prisma.assessment.findMany({
+      where: { subject: subjectScope, NOT: { title: { startsWith: "Attendance ·" } }, dueDate: { gte: today } },
+      orderBy: { dueDate: "asc" }, take: 8,
+      select: { id: true, title: true, dueDate: true, subject: { select: { id: true, code: true, title: true } } }
+    })
+  ]);
+
+  const students = new Set<string>();
+  let activities = 0;
+  let tests = 0;
+  let present = 0;
+  let absent = 0;
+  let excused = 0;
+  for (const subject of subjects) {
+    for (const enrollment of subject.enrollments) {
+      const key = enrollment.studentNumber?.trim().toLocaleLowerCase() || enrollment.studentUserId || enrollment.studentName.trim().replace(/\s+/g, " ").toLocaleLowerCase();
+      if (key) students.add(key);
+    }
+    for (const assessment of subject.assessments) {
+      const isAttendance = assessment.title.toLocaleLowerCase().startsWith("attendance ·");
+      if (isAttendance) {
+        for (const score of assessment.scores) {
+          if (score.remark === "PRESENT") present++;
+          else if (score.remark === "ABSENT") absent++;
+          else if (score.remark === "EXCUSED") excused++;
+        }
+        continue;
+      }
+      activities++;
+      if (/\b(test|exam)\b/i.test(`${assessment.title} ${assessment.category.name}`)) tests++;
+    }
+  }
+
+  const submissions = {
+    draft: subjects.filter(subject => subject.gradeStatus === "DRAFT").length,
+    provisional: subjects.filter(subject => subject.gradeStatus === "SUBMITTED").length,
+    final: subjects.filter(subject => subject.gradeStatus === "VERIFIED").length
+  };
+  const upcoming = (items: typeof upcomingAttendance) => items.map(item => ({
+    id: item.id,
+    title: item.title.replace(/^Attendance ·\s*/i, "Attendance"),
+    date: item.dueDate?.toISOString() ?? null,
+    subjectId: item.subject.id,
+    code: item.subject.code,
+    subjectTitle: item.subject.title
+  }));
+
+  return NextResponse.json({
+    stats: {
+      activeClasses: subjects.length,
+      activeStudents: students.size,
+      activities,
+      tests,
+      pendingReviews: submissions.provisional,
+      attendanceLogs: present + absent + excused
+    },
+    attendance: { present, absent, excused },
+    submissions,
+    enrollment: subjects.map(subject => ({ id: subject.id, label: subject.courseYear || subject.code, title: subject.title, code: subject.code, count: subject.enrollments.length })),
+    upcoming: { attendance: upcoming(upcomingAttendance), assessments: upcoming(upcomingAssessments) }
+  });
+}
