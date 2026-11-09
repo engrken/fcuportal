@@ -7,7 +7,7 @@ import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
 
 type User = { id: string; role: string; fullName: string; email: string; isTenantManager?: boolean; profileImagePath: string | null; studentNumber: string | null; courseProgram?: string | null; yearLevel?: string | null; school: { id: string; slug: string; name: string; shortName: string; portalTitle: string; logoText: string; logoPath: string | null; primaryColor: string } };
 type Subject = { id: string; classId: string | null; code: string; title: string; term: string; academicYear: string; schedule: string | null; courseYear: string | null; isPublished: boolean; gradeStatus: "DRAFT" | "SUBMITTED" | "VERIFIED"; submittedAt: string | null; verifiedAt: string | null; _count?: { enrollments: number } };
-type Category = { id: string; parentId: string | null; name: string; weight: number; conversionBase: number };
+type Category = { id: string; parentId: string | null; name: string; weight: number; conversionBase: number; sortOrder: number };
 type Assessment = { id: string; categoryId: string; title: string; maxScore: number; weight: number | null; dueDate: string | null; scheduleOverrideReason?: string | null };
 type Enrollment = { id: string; studentName: string; studentNumber: string | null; studentUserId: string | null; student?: { email: string } | null; remarks: string | null; scores: Array<{ assessmentId: string; points: number | null; remark: string | null }>; finalPercent: number | null };
 type GradeBand = { id: string; minPercent: number; finalGrade: string; remarks: string };
@@ -517,24 +517,24 @@ export default function Portal({ user }: { user: User }) {
   useEffect(() => { if (rosterPage > rosterPageCount) setRosterPage(rosterPageCount); }, [rosterPage, rosterPageCount]);
   const recordCategories = useMemo(() => detail ? leafCategories(detail.categories) : [], [detail]);
   const scorebookCategories = useMemo(() => recordCategories.filter(category => !category.name.toLocaleLowerCase().includes("attendance")), [recordCategories]);
-  const scorebookAssessments = useMemo(() => {
-    if (!detail) return [];
-    const categoryOrder = new Map(scorebookCategories.map((category, index) => [category.id, index]));
-    return detail.assessments.filter(item => categoryOrder.has(item.categoryId)).sort((a, b) => (categoryOrder.get(a.categoryId) ?? 0) - (categoryOrder.get(b.categoryId) ?? 0));
-  }, [detail, scorebookCategories]);
   const scorebookGroups = useMemo(() => {
     if (!detail) return [] as Array<{ parent: Category; subcategories: Category[]; items: Assessment[] }>;
     const includedLeaves = new Set(scorebookCategories.map(category => category.id));
     const descendants = (categoryId: string): Category[] => {
       const children = detail.categories.filter(category => category.parentId === categoryId);
       if (!children.length) return includedLeaves.has(categoryId) ? detail.categories.filter(category => category.id === categoryId) : [];
-      return children.flatMap(child => descendants(child.id));
+      return children.slice().sort((a, b) => a.sortOrder - b.sortOrder).flatMap(child => descendants(child.id));
     };
-    return detail.categories.filter(category => !category.parentId).map(parent => {
-      const subcategories = descendants(parent.id);
-      return { parent, subcategories, items: scorebookAssessments.filter(item => subcategories.some(category => category.id === item.categoryId)) };
+    return detail.categories.filter(category => !category.parentId).slice().sort((a, b) => a.sortOrder - b.sortOrder).map(parent => {
+      const subcategories = descendants(parent.id).filter(category => detail.assessments.some(item => item.categoryId === category.id && includedLeaves.has(item.categoryId)));
+      const items = subcategories.flatMap(category => detail.assessments.filter(item => item.categoryId === category.id));
+      return { parent, subcategories, items };
     }).filter(group => group.items.length > 0);
-  }, [detail, scorebookCategories, scorebookAssessments]);
+  }, [detail, scorebookCategories]);
+  // Keep assessment headers and score cells in the same hierarchical order as
+  // the parent and subcategory headers above. Sorting by leaf-category order
+  // alone can put a child assessment under a different parent's table column.
+  const scorebookAssessments = useMemo(() => scorebookGroups.flatMap(group => group.items), [scorebookGroups]);
   const printCategories = useMemo(() => detail ? leafCategories(detail.categories) : [], [detail]);
   const weightGroups = useMemo(() => {
     if (!detail) return [];
