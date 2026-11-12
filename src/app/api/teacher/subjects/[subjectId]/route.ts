@@ -78,6 +78,7 @@ export async function PATCH(request: Request, context: Context) {
     if (subject.gradeStatus !== "DRAFT") return NextResponse.json({ error: "Recall submitted grades before editing class details." }, { status: 409 });
     const parsed = subjectDetailsSchema.safeParse(input); if (!parsed.success) return NextResponse.json({ error: "Check the Class ID and class details." }, { status: 400 });
     const details = parsed.data.updateSubject;
+    if (details.term === "Trimester") details.term = "3rd Semester";
     if (await prisma.subject.findFirst({ where: { schoolId: teacher.schoolId, id: { not: subjectId }, classId: { equals: details.classId, mode: "insensitive" } }, select: { id: true } })) return NextResponse.json({ error: "That Class ID is already used in this school." }, { status: 409 });
     await prisma.subject.update({ where: { id: subjectId }, data: details });
     await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "updated class identity, schedule, or course details", entity: "subject", entityId: subjectId } });
