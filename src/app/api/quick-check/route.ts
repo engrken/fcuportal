@@ -2,28 +2,46 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { checkAuthThrottle } from "@/lib/rate-limit";
+import { consumeEmailChallenge, emailVerificationFields, issueEmailChallenge, opaqueChallengeId } from "@/lib/email-verification";
+import { emailDeliveryConfigured } from "@/lib/mailer";
 import { calculateCategoryPercent, calculateFinal, equivalentFromBands } from "@/lib/grades";
 
 const schema = z.object({
   schoolId: z.string().min(1),
   studentNumber: z.string().trim().min(4).max(40),
-  email: z.string().trim().email().max(200)
+  email: z.string().trim().email().max(200),
+  ...emailVerificationFields
 });
 
 export async function POST(request: Request) {
-  const parsed = schema.safeParse(await request.json());
+  const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Enter the student ID and email address on the class record." }, { status: 400 });
   const schoolId = parsed.data.schoolId;
   const studentNumber = parsed.data.studentNumber.toUpperCase();
   const email = parsed.data.email.toLowerCase();
-  const throttle = await checkAuthThrottle(request, `quick-check:${schoolId}:${studentNumber}:${email}`, 5);
-  const networkThrottle = await checkAuthThrottle(request, "quick-check-network", 25);
+  const { challengeId, code } = parsed.data;
+  if (Boolean(challengeId) !== Boolean(code)) return NextResponse.json({ error: "Request a code and enter all six digits." }, { status: 400 });
+  const phase = challengeId ? "verify" : "send";
+  const throttle = await checkAuthThrottle(request, `quick-check:${phase}:${schoolId}:${studentNumber}:${email}`, challengeId ? 8 : 4, undefined, "identity");
+  const networkThrottle = await checkAuthThrottle(request, `quick-check:${phase}:network`, 25);
   if (!throttle.allowed || !networkThrottle.allowed) return NextResponse.json({ error: "Too many quick-check attempts. Try again in 15 minutes." }, { status: 429 });
 
   const profile = await prisma.studentDirectory.findUnique({ where: { schoolId_studentNumber: { schoolId, studentNumber } } });
-  if (!profile) return NextResponse.json({ error: "We could not verify those details. Check the student ID and email address or contact your teacher." }, { status: 404 });
-  const existingAccount = await prisma.user.findFirst({ where: { schoolId, role: "STUDENT", studentNumber: profile.studentNumber, email }, select: { id: true } });
-  if (profile.email.toLowerCase() !== email && !existingAccount) return NextResponse.json({ error: "We could not verify those details. Check the student ID and email address or contact your teacher." }, { status: 404 });
+  const existingAccount = profile ? await prisma.user.findFirst({ where: { schoolId, role: "STUDENT", studentNumber: profile.studentNumber, email, emailVerifiedAt: { not: null } }, select: { id: true } }) : null;
+  const binding = ["quick-check", schoolId, studentNumber, email];
+  const matches = profile && (profile.email.toLowerCase() === email || existingAccount);
+  if (!challengeId || !code) {
+    if (!emailDeliveryConfigured()) return NextResponse.json({ error: "Email verification is temporarily unavailable." }, { status: 503 });
+    let id = opaqueChallengeId();
+    if (matches) {
+      try { id = await issueEmailChallenge(binding, email); }
+      catch { return NextResponse.json({ error: "Email verification is temporarily unavailable." }, { status: 503 }); }
+    }
+    return NextResponse.json({ challengeId: id }, { status: 202, headers: { "Cache-Control": "no-store" } });
+  }
+  if (!profile || !matches || !(await consumeEmailChallenge(prisma, binding, challengeId, code))) {
+    return NextResponse.json({ error: "The verification code is invalid, expired, or already used." }, { status: 400 });
+  }
 
   const enrollments = await prisma.enrollment.findMany({
     where: { studentNumber: profile.studentNumber, subject: { schoolId, gradeStatus: { in: ["SUBMITTED", "VERIFIED"] } } },
@@ -58,5 +76,5 @@ export async function POST(request: Request) {
       })
     };
   });
-  return NextResponse.json({ student: { fullName: profile.fullName, studentNumber: profile.studentNumber }, accountExists: !!existingAccount, schoolId, grades });
+  return NextResponse.json({ student: { fullName: profile.fullName, studentNumber: profile.studentNumber }, accountExists: !!existingAccount, schoolId, grades }, { headers: { "Cache-Control": "no-store" } });
 }

@@ -7,6 +7,7 @@ import SchoolSelect from "@/components/SchoolSelect";
 export default function RegisterPage() {
   const router = useRouter();
   const [error, setError] = useState("");
+  const [challengeId, setChallengeId] = useState("");
   const [busy, setBusy] = useState(false);
   const [role, setRole] = useState<"STUDENT" | "TEACHER">("STUDENT");
   const [schoolId, setSchoolId] = useState("");
@@ -40,6 +41,8 @@ export default function RegisterPage() {
           studentNumber: form.get("studentNumber") || undefined,
           inviteCode: form.get("inviteCode") || undefined,
           role,
+          challengeId: challengeId || undefined,
+          code: challengeId ? form.get("code") : undefined,
           acknowledgedPrivacyNotice: form.get("privacyNotice") === "on",
           acknowledgedTerms: form.get("termsOfService") === "on",
           termsVersion: "2026-11-12"
@@ -47,6 +50,7 @@ export default function RegisterPage() {
       });
       const data = await response.json();
       if (!response.ok) { setError(data.error || "Unable to create account."); return; }
+      if (response.status === 202) { setChallengeId(data.challengeId); return; }
       router.replace("/dashboard");
       router.refresh();
     } catch {
@@ -71,8 +75,9 @@ export default function RegisterPage() {
         <label className="form-label" htmlFor="regPassword">Password</label><input className="form-control" id="regPassword" name="password" type="password" minLength={12} required autoComplete="new-password"/><div className="form-text mb-3">Use at least 12 characters.</div>
         <div className="form-check mb-2"><input className="form-check-input" type="checkbox" id="termsOfService" name="termsOfService" required/><label className="form-check-label small" htmlFor="termsOfService">I agree to the <Link href={termsHref} target="_blank" rel="noreferrer">Terms of Service</Link>.</label></div>
         <div className="form-check mb-3"><input className="form-check-input" type="checkbox" id="privacyNotice" name="privacyNotice" required/><label className="form-check-label small" htmlFor="privacyNotice">I have read the <Link href={privacyHref} target="_blank" rel="noreferrer">Privacy Notice</Link>.</label></div>
+        {challengeId && <div className="mt-3"><label className="form-label" htmlFor="verificationCode">Email verification code</label><input className="form-control" id="verificationCode" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required/><p className="form-text">Enter the six-digit code sent to your email. It expires in 10 minutes.</p><button type="button" className="btn btn-link px-0" onClick={() => { setChallengeId(""); setError(""); }}>Request another code</button></div>}
         {error && <div className="alert alert-danger py-2">{error}</div>}
-        <button className="btn btn-primary w-100 mt-2" disabled={!canSubmit}>{busy ? "Creating account…" : "Create account"}</button>
+        <button className="btn btn-primary w-100 mt-2" disabled={!canSubmit}>{busy ? "Please wait…" : challengeId ? "Verify and create account" : "Send verification code"}</button>
       </form>
       <p className="auth-bottom">Already registered? <Link href={`/login?schoolId=${encodeURIComponent(schoolId)}`}>Sign in</Link></p><p className="privacy-note">Student registration requires an existing class directory entry with a matching Student ID and email address.</p>
     </div></section>
