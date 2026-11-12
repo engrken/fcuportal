@@ -35,6 +35,14 @@ function newScheduleRow(): ScheduleRow {
 }
 function todayDateInput() { const now = new Date(); return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
 function formatOverviewDate(value: string | null) { return value ? new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric", year: "numeric", timeZone: "Asia/Manila" }).format(new Date(value)) : "Date not set"; }
+function scoreSheetCategoryLabel(name: string) {
+  const label = name.trim();
+  if (/^laboratory\\s+exam\\b/i.test(label)) return "Lab Exam";
+  if (/^laboratory\\s+exercises?\\b/i.test(label)) return "Lab Exercises";
+  if (/^self[-\\s]?evaluation\\s+exercises?\\b/i.test(label)) return "Self-Evaluation";
+  if (/^major\\s+examinations?\\b/i.test(label)) return "Major Exams";
+  return label.replace(/\\blaboratory\\b/gi, "Lab");
+}
 function shiftDateInput(value: string, days: number) { const date = new Date(`${value}T00:00:00`); date.setDate(date.getDate() + days); return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
 function pieGradient(values: number[], colors: string[]) {
   const total = values.reduce((sum, value) => sum + value, 0);
@@ -910,16 +918,16 @@ export default function Portal({ user, initialPage = "overview" }: { user: User;
           </section>}
           {classSection === "record" && <section id="class-section-record" className="surface gradebook-card scorebook-section"><div className="section-heading"><div><span className="eyebrow">ELECTRONIC CLASS RECORD</span><h2>Record scores</h2><p className="muted">Enter scores by student and assessment. Changes save when you leave a score field. Converted grades and course contributions recalculate automatically.</p></div><div className="scorebook-toolbar"><span className="gradebook-count">{filteredEnrollments.length} of {detail.enrollments.length} students · {detail.assessments.length} items</span><button className="btn btn-outline-primary btn-sm" onClick={()=>downloadScoreCsv(true)} disabled={!scorebookAssessments.length}>Download template</button><button className="btn btn-outline-primary btn-sm" onClick={()=>{setBulkScoresOpen(true);setBulkErrors([]);setBulkRowsPreview([]);setBulkOperations([])}} disabled={!scorebookAssessments.length||detail.gradeStatus==="VERIFIED"}>Import scores</button><button className="btn btn-outline-secondary btn-sm" onClick={()=>downloadScoreCsv(false)} disabled={!scorebookAssessments.length}>Export scores</button></div></div>
             {scorebookAssessments.length === 0 && <div className="inline-empty">The full class roster is shown below. Add assessment items to enable score entry.</div>}
-            {filteredEnrollments.length > 0 && <div className="score-sheet-wrap"><table className="score-sheet"><colgroup><col style={{width:scorebookAssessments.length?"19%":"39%"}}/><col style={{width:scorebookAssessments.length?"8%":"8%"}}/>{scorebookAssessments.map(item=><col key={item.id} style={{width:`${44 / Math.max(1, scorebookAssessments.length)}%`}}/>)}<col style={{width:scorebookAssessments.length?"9%":"14%"}}/><col style={{width:scorebookAssessments.length?"8%":"14%"}}/><col style={{width:scorebookAssessments.length?"12%":"25%"}}/></colgroup><thead>
+            {filteredEnrollments.length > 0 && <div className="score-sheet-wrap"><table className="score-sheet"><colgroup><col style={{width:scorebookAssessments.length?"18%":"39%"}}/><col style={{width:scorebookAssessments.length?"8%":"8%"}}/>{scorebookAssessments.map(item=><col key={item.id} style={{width:`${50 / Math.max(1, scorebookAssessments.length)}%`}}/>)}<col style={{width:scorebookAssessments.length?"7%":"14%"}}/><col style={{width:scorebookAssessments.length?"7%":"14%"}}/><col style={{width:scorebookAssessments.length?"9%":"25%"}}/></colgroup><thead>
   <tr>
     <th className="score-sheet-student" rowSpan={scorebookHeaderRows.rowSpan}>STUDENT</th>
     <th className="score-sheet-summary-head score-sheet-attendance-summary" rowSpan={scorebookHeaderRows.rowSpan}>ATTENDANCE %<small>Present / P + A</small></th>
-    {scorebookHeaderRows.rows[0]?.map(({category,colSpan,rowSpan})=><th className="score-sheet-category score-sheet-parent" key={category.id} colSpan={colSpan} rowSpan={rowSpan}>{category.name}<small>{categoryWeightLabel(category,detail.categories)}</small></th>)}
+    {scorebookHeaderRows.rows[0]?.map(({category,colSpan,rowSpan})=><th className="score-sheet-category score-sheet-parent" key={category.id} colSpan={colSpan} rowSpan={rowSpan}><span title={category.name}>{scoreSheetCategoryLabel(category.name)}</span><small>{categoryWeightLabel(category,detail.categories)}</small></th>)}
     <th className="score-sheet-summary-head" rowSpan={scorebookHeaderRows.rowSpan}>TOTAL GRADE<small>100%</small></th>
     <th className="score-sheet-summary-head" rowSpan={scorebookHeaderRows.rowSpan}>FINAL GRADE</th>
     <th className="score-sheet-summary-head" rowSpan={scorebookHeaderRows.rowSpan}>CLASS REMARK</th>
   </tr>
-  {scorebookHeaderRows.rows.slice(1).map((row,index)=><tr key={`category-level-${index+1}`}>{row.map(({category,colSpan,rowSpan})=><th className="score-sheet-subcategory" key={category.id} colSpan={colSpan} rowSpan={rowSpan}>{category.name}<small>{categoryWeightLabel(category,detail.categories)}</small></th>)}</tr>)}
+  {scorebookHeaderRows.rows.slice(1).map((row,index)=><tr key={`category-level-${index+1}`}>{row.map(({category,colSpan,rowSpan})=><th className="score-sheet-subcategory" key={category.id} colSpan={colSpan} rowSpan={rowSpan}><span title={category.name}>{scoreSheetCategoryLabel(category.name)}</span><small>{categoryWeightLabel(category,detail.categories)}</small></th>)}</tr>)}
   <tr>{scorebookAssessments.map(item=><th className="score-sheet-assessment" key={item.id} title={`${item.title} · Perfect score ${item.maxScore}${item.dueDate?` · ${new Date(item.dueDate).toLocaleDateString()}`:""}`}><span>{item.title}</span><small>Max {item.maxScore}</small></th>)}</tr>
 </thead><tbody>{filteredEnrollments.map((enrollment,index)=>{
               const band=detail.gradeBands.slice().sort((a,b)=>b.minPercent-a.minPercent).find(item=>enrollment.finalPercent!==null&&enrollment.finalPercent>=item.minPercent);
