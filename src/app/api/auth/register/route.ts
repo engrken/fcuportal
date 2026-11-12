@@ -11,7 +11,8 @@ const bodySchema = z.object({
   schoolId: z.string().min(1).optional(), schoolName: z.string().trim().min(2).max(160).optional(),
   fullName: z.string().trim().min(2).max(120).optional(), email: z.string().trim().email().max(200),
   password: z.string().min(12).max(100), role: z.enum(["TEACHER", "STUDENT"]),
-  studentNumber: z.string().trim().max(40).optional(), inviteCode: z.string().optional(), acknowledgedPrivacyNotice: z.literal(true)
+  studentNumber: z.string().trim().max(40).optional(), inviteCode: z.string().optional(), acknowledgedPrivacyNotice: z.literal(true),
+  acknowledgedTerms: z.literal(true), termsVersion: z.literal("2026-11-12")
 });
 
 function schoolIdentity(name: string) {
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
   try {
     const parsed = bodySchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: "Check the required fields. Passwords must be at least 12 characters." }, { status: 400 });
-    const { schoolId, schoolName, fullName, email, password, role, studentNumber, inviteCode } = parsed.data;
+    const { schoolId, schoolName, fullName, email, password, role, studentNumber, inviteCode, termsVersion } = parsed.data;
     const normalizedEmail = email.toLowerCase();
     const throttle = await checkAuthThrottle(request, `register:${role}:${normalizedEmail}`, 4);
     if (!throttle.allowed) return NextResponse.json({ error: "Too many account creation attempts. Try again in 15 minutes." }, { status: 429 });
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
         if (!school) throw new Error("SCHOOL_NOT_READY");
       }
       if (!school) throw new Error("SCHOOL_NOT_READY");
-      const created = await tx.user.create({ data: { schoolId: school.id, fullName: studentProfile?.fullName ?? fullName!, email: normalizedEmail, passwordHash, role, studentNumber: role === "STUDENT" ? studentProfile?.studentNumber : null, courseProgram: studentProfile?.courseProgram ?? null, yearLevel: studentProfile?.yearLevel ?? null, privacyNoticeAcceptedAt: new Date() }, select: { id: true, role: true, schoolId: true } });
+      const created = await tx.user.create({ data: { schoolId: school.id, fullName: studentProfile?.fullName ?? fullName!, email: normalizedEmail, passwordHash, role, studentNumber: role === "STUDENT" ? studentProfile?.studentNumber : null, courseProgram: studentProfile?.courseProgram ?? null, yearLevel: studentProfile?.yearLevel ?? null, privacyNoticeAcceptedAt: new Date(), termsAcceptedAt: new Date(), termsOfServiceVersion: termsVersion }, select: { id: true, role: true, schoolId: true } });
       if (studentProfile) await tx.enrollment.updateMany({ where: { studentNumber: studentProfile.studentNumber, studentUserId: null, subject: { schoolId: school.id } }, data: { studentUserId: created.id } });
       return created;
     });
