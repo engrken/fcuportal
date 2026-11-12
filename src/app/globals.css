@@ -598,3 +598,32 @@
 .portal-layout .score-sheet-subcategory,
 .portal-layout .score-sheet-assessment{padding:7px 4px;vertical-align:middle}
 @media(max-width:760px){.portal-layout .score-sheet thead th{padding:4px 2px;line-height:1.1}.portal-layout .score-sheet-category small,.portal-layout .score-sheet-subcategory small{font-size:.45rem}}
+/* Philippine public holiday calendar */
+.ph-holiday-calendar{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:#fbfcff;color:var(--ink)}
+.ph-calendar-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.ph-calendar-toolbar strong{font-size:.86rem;color:var(--ink)}
+.ph-calendar-nav{width:30px;height:30px;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--blue);font-size:1.25rem;line-height:1;cursor:pointer}
+.ph-calendar-nav:hover{background:#edf3ff;border-color:#b9ccfa}
+.ph-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;text-align:center}
+.ph-calendar-weekday{font-size:.67rem;font-weight:700;color:var(--muted);padding:4px 0}
+.ph-calendar-day{position:relative;min-height:34px;border:1px solid transparent;border-radius:7px;background:transparent;color:var(--ink);font:inherit;font-size:.78rem;cursor:pointer}
+.ph-calendar-day:hover{background:#edf3ff;border-color:#cbd9f8}
+.ph-calendar-day.is-holiday{background:#fff8e6;color:#875800;font-weight:700}
+.ph-calendar-day.is-holiday:hover{background:#fff0c2}
+.ph-calendar-day.is-selected,.ph-calendar-day.is-selected:hover{background:var(--blue);border-color:var(--blue);color:#fff}
+.ph-holiday-dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:#e2a326}
+.ph-calendar-day .ph-holiday-dot{position:absolute;left:calc(50% - 2.5px);bottom:3px}
+.ph-calendar-day.is-selected .ph-holiday-dot{background:#fff}
+.ph-calendar-legend{display:flex;align-items:center;gap:6px;margin-top:8px;color:var(--muted);font-size:.68rem}
+.ph-calendar-holiday-note{display:flex;flex-direction:column;gap:2px;min-height:34px;margin-top:8px;padding:7px 9px;border-radius:7px;background:#f0f4fb;color:var(--muted);font-size:.72rem}
+.ph-calendar-holiday-note b{color:var(--ink);font-size:.75rem}
+.ph-calendar-holiday-note span{font-size:.67rem}
+.portal-layout[data-bs-theme="dark"] .ph-holiday-calendar{background:#172235;border-color:#34425a;color:#d4e3fa}
+.portal-layout[data-bs-theme="dark"] .ph-calendar-toolbar strong,.portal-layout[data-bs-theme="dark"] .ph-calendar-day{color:#d4e3fa}
+.portal-layout[data-bs-theme="dark"] .ph-calendar-nav{background:#1d2b40;border-color:#34425a;color:#a9c4ff}
+.portal-layout[data-bs-theme="dark"] .ph-calendar-nav:hover,.portal-layout[data-bs-theme="dark"] .ph-calendar-day:hover{background:#263754;border-color:#45618b}
+.portal-layout[data-bs-theme="dark"] .ph-calendar-day.is-holiday{background:#42381f;color:#f6d37c}
+.portal-layout[data-bs-theme="dark"] .ph-calendar-day.is-selected,.portal-layout[data-bs-theme="dark"] .ph-calendar-day.is-selected:hover{background:var(--blue);border-color:var(--blue);color:#fff}
+.portal-layout[data-bs-theme="dark"] .ph-calendar-holiday-note{background:#1d2b40;color:#a5b1c2}
+.portal-layout[data-bs-theme="dark"] .ph-calendar-holiday-note b{color:#d4e3fa}
+@media(max-width:520px){.ph-holiday-calendar{padding:10px}.ph-calendar-grid{gap:2px}.ph-calendar-day{min-height:31px}}
