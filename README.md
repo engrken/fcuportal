@@ -9,7 +9,7 @@ SAGA (School Assessment, Grading & Analytics) is a multi-school grading portal b
 - Assessment scores are entered against maximum points and calculated using category weights. Sample categories reflect the current spreadsheet’s 20/30/25/15/10 weights and its 70/30 conversion for scored work; attendance/participation defaults to direct percentage.
 - Student accounts automatically match same-school class roster entries by student number. Students see a class after its grades are submitted; teachers do not need a separate link step.
 - Teacher-controlled publication; students see only published subjects linked to their account.
-- Profile name/photo editing, verified sign-in email changes, authenticated password changes, hashed passwords, signed HttpOnly sessions, secure production cookies, request validation, database-backed auth throttling, and grade-change audit events for key teacher actions.
+- Profile name/photo editing, sign-in email changes verified through both inboxes, authenticated password changes, hashed passwords, signed HttpOnly sessions, secure production cookies, request validation, database-backed auth throttling, and grade-change audit events for key teacher actions.
 - Responsive Bootstrap UI with a compact mobile score-entry view and a no-horizontal-scroll workbook layout on wider screens.
 - School-scoped page URLs: `/{schoolSlug}/overview`, `/{schoolSlug}/classes`, and `/{schoolSlug}/profile`; tenant management is at `/manage`.
 
@@ -31,7 +31,7 @@ The grade scale and default weights are examples based on the supplied grade she
 
 1. Connect this repository to a Vercel project and provision a Neon PostgreSQL database in a region suitable for the intended users and applicable privacy obligations.
 2. Add `DATABASE_URL` (pooled runtime URL), `DIRECT_URL` (direct migration URL), `AUTH_SECRET`, and `TEACHER_INVITE_CODE` to Vercel’s environment variables. Add `GMAIL_SMTP_USER` and `GMAIL_SMTP_APP_PASSWORD` to enable password recovery and email-change verification. Use separate random secrets for production and preview deployments.
-3. Review the Prisma migrations before release. Production builds run `prisma migrate deploy`; verify that deployment is connected to the intended database. Configure `SAGA_TENANT_MANAGER_EMAIL` to the platform manager’s sign-in email; that account must also have an active SAGA teacher login. Do not point a local or preview deployment at the production student database.
+3. Apply reviewed Prisma migrations with `npm run db:migrate` using the production schema administrator’s direct connection before deploying. The production build checks migration status. Set `SAGA_TENANT_MANAGER_EMAIL` to the platform manager’s verified teacher email when granting access. Once that manager changes their sign-in email, keep the configured value to retain the link to the same account. Use a separate database for local and preview deployments.
 4. Deploy and confirm database connection, account creation, student/teacher access separation, roster linking, score calculations, and publication behavior with synthetic records before importing real data.
 5. Configure backups, retention, access to deployment logs, incident response, and a way for authorized staff to fulfill privacy requests.
 

@@ -26,16 +26,18 @@ export async function POST(_request: Request, context: Context) {
   const ids = subject.enrollments.map(enrollment => enrollment.studentNumber).filter((value): value is string => !!value);
   const [directory, portalAccounts] = await Promise.all([
     prisma.studentDirectory.findMany({ where: { schoolId: teacher.schoolId, studentNumber: { in: ids } }, select: { studentNumber: true, email: true } }),
-    prisma.user.findMany({ where: { schoolId: teacher.schoolId, role: "STUDENT", studentNumber: { in: ids } }, select: { studentNumber: true, email: true } })
+    prisma.user.findMany({ where: { schoolId: teacher.schoolId, role: "STUDENT", studentNumber: { in: ids } }, select: { studentNumber: true, email: true, emailVerifiedAt: true } })
   ]);
   const directoryEmailById = new Map(directory.map(student => [student.studentNumber, student.email]));
-  const portalEmailById = new Map(portalAccounts.flatMap(student => student.studentNumber ? [[student.studentNumber, student.email] as const] : []));
+  const portalAccountById = new Map(portalAccounts.map(student => [student.studentNumber, student]));
   let sent = 0;
   let skipped = 0;
   const failures: string[] = [];
 
   for (const enrollment of subject.enrollments) {
-    const to = enrollment.studentNumber ? portalEmailById.get(enrollment.studentNumber) || directoryEmailById.get(enrollment.studentNumber) : undefined;
+    const studentNumber = enrollment.studentNumber;
+    const account = studentNumber ? portalAccountById.get(studentNumber) : undefined;
+    const to = account ? (account.emailVerifiedAt ? account.email : null) : studentNumber && directoryEmailById.get(studentNumber);
     if (!to) { skipped++; continue; }
     const categories = subject.categories.map(category => ({
       id: category.id,

@@ -89,6 +89,11 @@ export async function POST(request: Request) {
         const limits = SCHOOL_PLAN_LIMITS[school.plan];
         if (teacherCount >= limits.teachers) throw new Error(`PLAN_LIMIT_TEACHERS:${limits.teachers}`);
       } else {
+        const [currentProfile] = await tx.$queryRaw<{ email: string }[]>`
+          SELECT "email" FROM "StudentDirectory"
+          WHERE "schoolId" = ${schoolId!} AND "studentNumber" = ${normalizedStudentNumber!} FOR UPDATE
+        `;
+        if (currentProfile?.email.toLowerCase() !== normalizedEmail) throw new Error("STUDENT_EMAIL_CHANGED");
         school = await tx.school.findFirst({ where: { id: schoolId!, isActive: true, users: { some: { role: "TEACHER" } } } });
         if (!school) throw new Error("SCHOOL_NOT_READY");
       }
@@ -103,6 +108,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("PLAN_LIMIT_TEACHERS:")) return NextResponse.json({ error: `This school has reached its teacher limit (${error.message.split(":")[1]}). Contact SAGA to upgrade the school plan.` }, { status: 402 });
     if (error instanceof Error && error.message === "SCHOOL_INACTIVE") return NextResponse.json({ error: "This school workspace is currently inactive. Contact SAGA support to restore access." }, { status: 403 });
+    if (error instanceof Error && error.message === "STUDENT_EMAIL_CHANGED") return NextResponse.json({ error: "Your school roster email changed. Check it with your school and start registration again." }, { status: 409 });
     if (error instanceof Error && error.message === "SCHOOL_NOT_READY") return NextResponse.json({ error: "That school is not accepting student registration yet." }, { status: 400 });
     if (error && typeof error === "object" && "code" in error && error.code === "P2002") return NextResponse.json({ error: "An account already uses that email or student number." }, { status: 409 });
     return NextResponse.json({ error: "Could not create the account." }, { status: 500 });

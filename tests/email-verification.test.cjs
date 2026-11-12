@@ -4,12 +4,12 @@ const path = require("node:path");
 const test = require("node:test");
 const ts = require("typescript");
 
-function setup() {
+function setup({ failingAddress } = {}) {
   const records = new Map();
-  let deliveredCode;
+  const deliveries = new Map();
   const table = {
     async create({ data }) { records.set(data.id, { attempts: 0, usedAt: null, ...data }); },
-    async deleteMany() { return { count: 0 }; },
+    async deleteMany({ where }) { return { count: where.id && records.delete(where.id) ? 1 : 0 }; },
     async updateMany({ where, data }) {
       const row = records.get(where.id);
       if (!row || row.bindingHash !== where.bindingHash || row.usedAt !== null
@@ -23,14 +23,17 @@ function setup() {
   const db = { emailVerificationChallenge: table };
   const mocks = {
     "@/lib/prisma": { prisma: db },
-    "@/lib/mailer": { sendPortalEmail: async ({ text }) => { deliveredCode = text.match(/\b\d{6}\b/)[0]; } }
+    "@/lib/mailer": { sendPortalEmail: async ({ to, text }) => {
+      if (to === failingAddress) throw new Error("SMTP delivery failed");
+      deliveries.set(to, text.match(/\b\d{6}\b/)[0]);
+    } }
   };
   const source = fs.readFileSync(path.join(__dirname, "../src/lib/email-verification.ts"), "utf8");
   const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
   const exports = {};
   const scopedRequire = name => mocks[name] || require(name);
   new Function("require", "exports", "process", compiled)(scopedRequire, exports, { env: { AUTH_SECRET: "synthetic-signing-secret-for-unit-tests" } });
-  return { db, records, code: () => deliveredCode, ...exports };
+  return { db, records, code: (email = [...deliveries.keys()][0]) => deliveries.get(email), ...exports };
 }
 
 test("verification is bound to its school, account and purpose and can be consumed once", async () => {
@@ -53,4 +56,29 @@ test("expired and repeatedly guessed codes cannot be redeemed", async () => {
   const wrong = code() === "000000" ? "111111" : "000000";
   for (let i = 0; i < 5; i++) assert.equal(await consumeEmailChallenge(db, binding, guessed, wrong), false);
   assert.equal(await consumeEmailChallenge(db, binding, guessed, code()), false);
+});
+
+test("an email change requires codes from both addresses on the same challenge", async () => {
+  const { issueEmailChangeChallenge, consumeEmailChallenge, db, code } = setup();
+  const current = "current@example.test";
+  const next = "new@example.test";
+  const binding = ["profile-email-change", "account-1", "school-1", current, next];
+  const id = await issueEmailChangeChallenge(binding, current, next);
+  const pair = code(current) + code(next);
+  const wrongCurrentCode = code(current) === "000000" ? "111111" : "000000";
+  const wrongNewCode = code(next) === "000000" ? "111111" : "000000";
+  assert.equal(await consumeEmailChallenge(db, binding, id, wrongCurrentCode + code(next)), false);
+  assert.equal(await consumeEmailChallenge(db, binding, id, code(current) + wrongNewCode), false);
+  assert.equal(await consumeEmailChallenge(db, [...binding, "other@example.test"], id, pair), false);
+  assert.equal(await consumeEmailChallenge(db, binding, id, pair), true);
+  assert.equal(await consumeEmailChallenge(db, binding, id, pair), false);
+});
+
+test("an email change challenge is removed when one address cannot receive the code", async () => {
+  const current = "current@example.test";
+  const next = "new@example.test";
+  const { issueEmailChangeChallenge, records, code } = setup({ failingAddress: next });
+  await assert.rejects(issueEmailChangeChallenge(["profile-email-change", current, next], current, next));
+  assert.match(code(current), /^\d{6}$/);
+  assert.equal(records.size, 0);
 });

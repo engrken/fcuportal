@@ -19,9 +19,41 @@ function digest(values: string[]) {
   return createHmac("sha256", secret).update(JSON.stringify(values)).digest("hex");
 }
 
-export async function issueEmailChallenge(binding: string[], email: string) {
+function verificationCode() {
+  return randomInt(0, 1_000_000).toString().padStart(6, "0");
+}
+
+export function issueEmailChallenge(binding: string[], email: string) {
+  const code = verificationCode();
+  return issueChallenge(binding, code, () => sendPortalEmail({
+    to: email,
+    subject: "Your SAGA email verification code",
+    text: `Enter this verification code in SAGA: ${code}\n\nThe code expires in 10 minutes. If you did not request it, you can ignore this email.`
+  }));
+}
+
+export function issueEmailChangeChallenge(binding: string[], currentEmail: string, newEmail: string) {
+  const currentCode = verificationCode();
+  const newCode = verificationCode();
+  return issueChallenge(binding, currentCode + newCode, async () => {
+    const results = await Promise.allSettled([
+      sendPortalEmail({
+        to: currentEmail,
+        subject: "SAGA email change code for your current address",
+        text: `Use ${currentCode} in SAGA to approve changing your sign-in email to ${newEmail}.\n\nThe code expires in 10 minutes. If you did not request this change, do not share this code and contact your portal administrator.`
+      }),
+      sendPortalEmail({
+        to: newEmail,
+        subject: "SAGA email change code for your new address",
+        text: `Use ${newCode} in SAGA to verify this as your new sign-in email.\n\nThe code expires in 10 minutes. If you did not request this change, you can ignore this message.`
+      })
+    ]);
+    if (results.some(result => result.status === "rejected")) throw new Error("EMAIL_CHANGE_DELIVERY_FAILED");
+  });
+}
+
+async function issueChallenge(binding: string[], code: string, deliver: () => Promise<void>) {
   const id = opaqueChallengeId();
-  const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
   const now = new Date();
   await prisma.emailVerificationChallenge.deleteMany({ where: { expiresAt: { lte: now } } });
   await prisma.emailVerificationChallenge.create({
@@ -33,11 +65,7 @@ export async function issueEmailChallenge(binding: string[], email: string) {
     }
   });
   try {
-    await sendPortalEmail({
-      to: email,
-      subject: "Your SAGA email verification code",
-      text: `Enter this verification code in SAGA: ${code}\n\nThe code expires in 10 minutes. If you did not request it, you can ignore this email.`
-    });
+    await deliver();
   } catch (error) {
     await prisma.emailVerificationChallenge.deleteMany({ where: { id } });
     throw error;

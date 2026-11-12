@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Enter your current password, a new password with at least 12 characters, and the six-digit verification code." }, { status: 400 });
   const throttle = await checkAuthThrottle(request, `profile-password-change:${user.id}`, 5);
   if (!throttle.allowed) return NextResponse.json({ error: "Too many password change attempts. Try again in 15 minutes." }, { status: 429 });
-  const account = await prisma.user.findFirst({ where: { id: user.id, schoolId: user.schoolId }, select: { email: true, passwordHash: true } });
+  const account = await prisma.user.findFirst({ where: { id: user.id, schoolId: user.schoolId }, select: { email: true, emailIdentityChangedAt: true, passwordHash: true } });
   if (!account || !(await bcrypt.compare(parsed.data.currentPassword, account.passwordHash))) return NextResponse.json({ error: "Your current password is incorrect." }, { status: 401 });
   if (await bcrypt.compare(parsed.data.newPassword, account.passwordHash)) return NextResponse.json({ error: "Choose a new password that differs from your current one." }, { status: 400 });
   const otp = await prisma.securityOtp.findFirst({ where: { userId: user.id, purpose: "PASSWORD_CHANGE", target: account.email.toLowerCase(), usedAt: null, attempts: { lt: 5 }, expiresAt: { gt: new Date() } }, orderBy: { createdAt: "desc" } });
@@ -27,9 +27,13 @@ export async function POST(request: Request) {
   const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
   try {
     await prisma.$transaction(async tx => {
+      const updated = await tx.user.updateMany({
+        where: { id: user.id, email: account.email, emailIdentityChangedAt: account.emailIdentityChangedAt, passwordHash: account.passwordHash },
+        data: { passwordHash, passwordChangedAt: new Date() }
+      });
+      if (updated.count !== 1) throw new Error("OTP_INVALID");
       const claimed = await tx.securityOtp.updateMany({ where: { id: otp.id, userId: user.id, purpose: "PASSWORD_CHANGE", target: account.email.toLowerCase(), usedAt: null, attempts: { lt: 5 }, expiresAt: { gt: new Date() } }, data: { usedAt: new Date() } });
       if (claimed.count !== 1) throw new Error("OTP_INVALID");
-      await tx.user.update({ where: { id: user.id }, data: { passwordHash, passwordChangedAt: new Date() } });
       await tx.passwordResetToken.deleteMany({ where: { userId: user.id } });
       await tx.securityOtp.deleteMany({ where: { userId: user.id, id: { not: otp.id } } });
       await tx.auditEvent.create({ data: { actorId: user.id, action: "changed account password", entity: "user", entityId: user.id } });

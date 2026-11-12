@@ -73,6 +73,8 @@ model User {
   passwordHash            String
   passwordChangedAt       DateTime?
   emailVerifiedAt          DateTime?
+  emailIdentityChangedAt   DateTime?
+  tenantManagerEmail       String?              @unique
   role                    Role
   schoolId                String
   fullName                String

@@ -15,7 +15,7 @@ const schema = z.object({
 
 export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Enter the student ID and email address on the class record." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "Enter a valid student ID and email address." }, { status: 400 });
   const schoolId = parsed.data.schoolId;
   const studentNumber = parsed.data.studentNumber.toUpperCase();
   const email = parsed.data.email.toLowerCase();
@@ -27,9 +27,16 @@ export async function POST(request: Request) {
   if (!throttle.allowed || !networkThrottle.allowed) return NextResponse.json({ error: "Too many quick-check attempts. Try again in 15 minutes." }, { status: 429 });
 
   const profile = await prisma.studentDirectory.findUnique({ where: { schoolId_studentNumber: { schoolId, studentNumber } } });
-  const existingAccount = profile ? await prisma.user.findFirst({ where: { schoolId, role: "STUDENT", studentNumber: profile.studentNumber, email, emailVerifiedAt: { not: null } }, select: { id: true } }) : null;
+  const existingAccount = profile ? await prisma.user.findFirst({
+    where: { schoolId, role: "STUDENT", studentNumber: profile.studentNumber },
+    select: { email: true, emailVerifiedAt: true, emailIdentityChangedAt: true }
+  }) : null;
   const binding = ["quick-check", schoolId, studentNumber, email];
-  const matches = profile && (profile.email.toLowerCase() === email || existingAccount);
+  if (existingAccount?.emailIdentityChangedAt) binding.push(existingAccount.emailIdentityChangedAt.toISOString());
+  const allowedEmail = existingAccount
+    ? (existingAccount.emailVerifiedAt ? existingAccount.email : null)
+    : profile?.email;
+  const matches = allowedEmail?.toLowerCase() === email;
   if (!challengeId || !code) {
     if (!emailDeliveryConfigured()) return NextResponse.json({ error: "Email verification is temporarily unavailable." }, { status: 503 });
     let id = opaqueChallengeId();
