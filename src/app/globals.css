@@ -298,3 +298,21 @@
 .portal-layout[data-bs-theme="dark"] .grade-history-list small{color:#a5b1c2}
 .portal-layout[data-bs-theme="dark"] .bulk-preview-scroll{border-color:#34425a}
 .portal-layout[data-bs-theme="dark"] .bulk-preview-scroll table{--bs-table-bg:#172235;--bs-table-color:#e4ebf6;--bs-table-border-color:#34425a}
+
+/* Keep hover specificity above the alternating row fills. */
+.portal-layout .grade-table tbody>tr:hover>*,
+.portal-layout .grade-table tbody>tr:focus-within>*,
+.portal-layout .ecr-table tbody>tr:hover>*,
+.portal-layout .ecr-table tbody>tr:focus-within>*,
+.portal-layout .attendance-table tbody>tr:hover>*,
+.portal-layout .attendance-table tbody>tr:focus-within>*,
+.portal-layout .score-sheet tbody>tr:hover>*,
+.portal-layout .score-sheet tbody>tr:focus-within>*{background-color:#e3edff!important}
+.portal-layout[data-bs-theme="dark"] .grade-table tbody>tr:hover>*,
+.portal-layout[data-bs-theme="dark"] .grade-table tbody>tr:focus-within>*,
+.portal-layout[data-bs-theme="dark"] .ecr-table tbody>tr:hover>*,
+.portal-layout[data-bs-theme="dark"] .ecr-table tbody>tr:focus-within>*,
+.portal-layout[data-bs-theme="dark"] .attendance-table tbody>tr:hover>*,
+.portal-layout[data-bs-theme="dark"] .attendance-table tbody>tr:focus-within>*,
+.portal-layout[data-bs-theme="dark"] .score-sheet tbody>tr:hover>*,
+.portal-layout[data-bs-theme="dark"] .score-sheet tbody>tr:focus-within>*{background-color:#2a3b58!important;color:#f1f5fb}
