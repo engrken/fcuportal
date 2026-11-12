@@ -61,7 +61,7 @@ export async function GET(request: Request) {
     prisma.assessment.findMany({
       where: { subject: subjectScope, NOT: { title: { startsWith: "Attendance ·" } }, dueDate: { gte: today } },
       orderBy: { dueDate: "asc" }, take: 8,
-      select: { id: true, title: true, dueDate: true, subject: { select: { id: true, code: true, title: true } } }
+      select: { id: true, title: true, dueDate: true, attendanceType: true, scheduleOverrideReason: true, subject: { select: { id: true, code: true, title: true } } }
     })
   ]);
 
