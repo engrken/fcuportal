@@ -218,6 +218,7 @@ model Assessment {
   weight                 Float?
   dueDate                DateTime?
   scheduleOverrideReason String?
+  attendanceType         String?
   createdAt              DateTime      @default(now())
   subject                Subject       @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   category               GradeCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
