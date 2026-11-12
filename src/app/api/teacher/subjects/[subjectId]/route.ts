@@ -393,7 +393,11 @@ export async function POST(request: Request, context: Context) {
   }
   const existingItems = subject.assessments.filter(item => item.categoryId === parsed.data.categoryId);
   if (existingItems.some(item => item.weight !== null) && (parsed.data.weight === undefined || parsed.data.weight === null)) return NextResponse.json({ error: "This category uses item weights. Enter a weight for this item." }, { status: 400 });
-  const assessment = await prisma.assessment.create({ data: { ...parsed.data, weight: parsed.data.weight ?? null, subjectId, dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : null, scheduleOverrideReason: parsed.data.scheduleOverrideReason || null, attendanceType: parsed.data.attendanceType || null } });
+  const assessment = await prisma.$transaction(async tx => {
+    const created = await tx.assessment.create({ data: { ...parsed.data, weight: parsed.data.weight ?? null, subjectId, dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : null, scheduleOverrideReason: parsed.data.scheduleOverrideReason || null, attendanceType: parsed.data.attendanceType || null } });
+    if (isAttendance && subject.enrollments.length) await tx.score.createMany({ data: subject.enrollments.map(enrollment => ({ enrollmentId: enrollment.id, assessmentId: created.id, points: null, remark: "PRESENT" })) });
+    return created;
+  });
   await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "created assessment", entity: "assessment", entityId: assessment.id } });
   return NextResponse.json({ assessment }, { status: 201 });
 }
