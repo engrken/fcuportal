@@ -257,3 +257,6 @@
 
 /* Alternate student rows for quick reading across rosters, attendance, and the scorebook. */
 .grade-table tbody > tr:nth-child(odd) > *, .score-sheet tbody > tr:nth-child(odd) > *{background-color:#fff}.grade-table tbody > tr:nth-child(even) > *, .score-sheet tbody > tr:nth-child(even) > *{background-color:#f3f5f7}
+
+.assessment-category-groups{display:grid;gap:12px;padding:0 18px 18px}.assessment-category-group{min-width:0;border:1px solid var(--line);border-radius:11px;overflow:hidden;background:#fff}.assessment-category-toggle{width:100%;display:flex;align-items:center;gap:12px;padding:12px 14px;border:0;background:#f7f9fc;color:#26364e;text-align:left}.assessment-category-toggle:hover{background:#eef3fb}.assessment-category-name{flex:1;font-size:.82rem;font-weight:750}.assessment-category-count{color:#6f7d91;font-size:.7rem;white-space:nowrap}.assessment-category-action{color:#2458d3;font-size:.7rem;font-weight:700;white-space:nowrap}.assessment-category-group .assessment-list{padding:10px}.assessment-category-group .assessment-list-row{background:#fff}
+@media(max-width:760px){.assessment-category-groups{padding:0 12px 14px}.assessment-category-toggle{gap:8px;padding:11px}.assessment-category-count,.assessment-category-action{font-size:.64rem}}
