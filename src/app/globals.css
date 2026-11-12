@@ -254,3 +254,6 @@
 
 /* Keep student identity and attendance summary visible while recent session columns scroll horizontally. */
 .attendance-table{border-collapse:separate;border-spacing:0;min-width:max-content}.attendance-table th:first-child,.attendance-table td:first-child{position:sticky;left:0;width:220px;min-width:220px;max-width:220px}.attendance-table th:nth-child(2),.attendance-table td:nth-child(2){position:sticky;left:220px;width:240px;min-width:240px;max-width:240px}.attendance-table thead th{position:sticky;top:0;z-index:4}.attendance-table thead th:first-child,.attendance-table thead th:nth-child(2){z-index:6;background:#f8f9fb}.attendance-table tbody td:first-child,.attendance-table tbody td:nth-child(2){z-index:3;background:#fff}.attendance-table th:nth-child(2),.attendance-table td:nth-child(2){box-shadow:2px 0 5px rgba(30,45,70,.08)}
+
+/* Alternate student rows for quick reading across rosters, attendance, and the scorebook. */
+.grade-table tbody > tr:nth-child(odd) > *, .score-sheet tbody > tr:nth-child(odd) > *{background-color:#fff}.grade-table tbody > tr:nth-child(even) > *, .score-sheet tbody > tr:nth-child(even) > *{background-color:#f3f5f7}
