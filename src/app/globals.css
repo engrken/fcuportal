@@ -503,3 +503,85 @@
 .sidebar-brand>span small{color:#0d7890;letter-spacing:.13em}
 .portal-layout[data-bs-theme="dark"] .sidebar-brand>span small{color:#69c7d5}
 @media(max-width:760px){.sidebar-app-mark{width:32px;height:32px;border-radius:9px}}
+
+
+/* Center every control in the collapsed sidebar on the same 48px rail. */
+.sidebar-collapsed .sidebar{align-items:stretch}
+.sidebar-collapsed .sidebar-pin-toggle{width:48px;height:44px;min-width:48px;margin:0 auto 19px;padding:0;justify-content:center}
+.sidebar-collapsed .sidebar-brand{width:48px;height:48px;display:grid;place-items:center;margin:0 auto 24px;padding:0}
+.sidebar-collapsed .sidebar-brand>span{display:none!important}
+.sidebar-collapsed .sidebar-app-mark{width:38px;height:38px}
+.sidebar-collapsed .sidebar-label{display:none}
+.sidebar-collapsed .side-link{width:48px;height:48px;min-height:48px;margin:3px auto;padding:0;display:flex;align-items:center;justify-content:center;gap:0}
+.sidebar-collapsed .nav-glyph{width:100%;font-size:1.2rem;line-height:1}
+.sidebar-collapsed .sidebar-nav-group{width:100%}
+.sidebar-collapsed .sidebar-bottom{display:none}
+
+.portal-help-trigger{display:inline-flex;align-items:center;gap:6px;font-weight:700}
+.portal-help-trigger>span{display:grid;width:17px;height:17px;place-items:center;border-radius:50%;background:#eaf0ff;color:#2458d3;font-size:.72rem;font-weight:850}
+.sidebar-collapsed .side-link[title*="FAQs"] .nav-glyph{font-weight:800}
+.guide-overlay{position:fixed;z-index:1400;inset:0;display:grid;place-items:center;padding:18px;background:rgba(12,23,42,.58);backdrop-filter:blur(4px)}
+.guide-dialog{position:relative;display:flex;flex-direction:column;width:min(100%,600px);max-height:min(90vh,820px);overflow:hidden;border:1px solid #e1e8f2;border-radius:18px;background:#fff;color:#202b3b;box-shadow:0 28px 90px rgba(5,16,35,.34)}
+.onboarding-dialog{padding:30px}
+.guide-close{position:absolute;z-index:2;right:16px;top:13px;display:grid;width:36px;height:36px;place-items:center;border:0;border-radius:9px;background:transparent;color:#718096;font-size:1.6rem;line-height:1}
+.guide-close:hover{background:#f0f3f8;color:#243b5b}
+.guide-eyebrow{color:#5575b0;font-size:.65rem;font-weight:850;letter-spacing:.13em}
+.guide-progress{display:flex;gap:6px;margin:24px 0 17px}
+.guide-progress>span{height:5px;flex:1;border-radius:9px;background:#e7ecf3}
+.guide-progress>span.done{background:linear-gradient(90deg,#2761d8,#5491ef)}
+.guide-step-label{color:#7d8aa0;font-size:.62rem;font-weight:800;letter-spacing:.1em}
+.onboarding-dialog h2{margin:7px 48px 9px 0;color:#1c2e4b;font-size:1.65rem;font-weight:800;letter-spacing:-.035em}
+.onboarding-dialog>p{min-height:72px;margin:0;color:#617189;font-size:.92rem;line-height:1.7}
+.guide-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:20px}
+.guide-actions .guide-skip{margin-right:auto;padding-left:0;color:#75839a;font-size:.75rem;text-decoration:none}
+.guide-actions .btn{font-size:.73rem;font-weight:700}
+.guide-revisit-note{display:block;margin-top:15px;color:#8a96a7;font-size:.64rem}
+.help-dialog{width:min(100%,920px)}
+.help-header{position:relative;display:flex;justify-content:space-between;gap:18px;padding:24px 28px 18px;border-bottom:1px solid #e9edf3}
+.help-header h2{margin:5px 0 3px;color:#1d2e49;font-size:1.45rem;font-weight:800;letter-spacing:-.035em}
+.help-header p{margin:0;color:#718096;font-size:.74rem}
+.help-header .guide-close{right:18px;top:18px}
+.help-tabs{display:flex;gap:5px;overflow-x:auto;padding:10px 24px;border-bottom:1px solid #e9edf3}
+.help-tabs button{flex:none;padding:8px 12px;border:0;border-radius:8px;background:transparent;color:#68778d;font-size:.71rem;font-weight:750}
+.help-tabs button:hover{background:#f1f5fb;color:#244fbb}
+.help-tabs button.active{background:#eaf0ff;color:#2458d3}
+.help-content{min-height:230px;overflow:auto;padding:21px 28px}
+.help-quick-guide{padding:18px 20px;border:1px solid #dce6f5;border-radius:12px;background:linear-gradient(120deg,#f3f7ff,#fff)}
+.help-quick-guide h3{margin:0 0 8px;color:#203858;font-size:1rem;font-weight:800}
+.help-quick-guide p,.help-manual p{color:#66758b;font-size:.76rem;line-height:1.65}
+.help-faq-list{display:grid;gap:8px}
+.help-faq-list details{border:1px solid #e5eaf1;border-radius:10px;background:#fff}
+.help-faq-list summary{padding:12px 14px;color:#2c3e59;font-size:.75rem;font-weight:750;cursor:pointer;list-style-position:inside}
+.help-faq-list details[open] summary{color:#2458d3;border-bottom:1px solid #edf0f4}
+.help-faq-list details p{margin:0;padding:11px 15px 14px;color:#68778d;font-size:.72rem;line-height:1.65}
+.help-manual .help-intro{margin:0 0 13px;padding:12px 14px;border-left:3px solid #3d6bd2;border-radius:0 8px 8px 0;background:#f3f7ff}
+.help-manual article{padding:12px 2px;border-bottom:1px solid #edf0f4}
+.help-manual article:last-child{border-bottom:0}
+.help-manual h3{margin:0 0 5px;color:#253b5a;font-size:.79rem;font-weight:800}
+.help-manual article p{margin:0}
+.help-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 24px;border-top:1px solid #e9edf3}
+.help-footer>span{color:#8190a3;font-size:.66rem}
+.help-footer .btn{font-size:.68rem;font-weight:700}
+.portal-layout[data-bs-theme="dark"] .guide-dialog{border-color:#34425a;background:#172235;color:#e4ebf6}
+.portal-layout[data-bs-theme="dark"] .guide-close{color:#a5b1c2}
+.portal-layout[data-bs-theme="dark"] .guide-close:hover{background:#263754;color:#f1f5fb}
+.portal-layout[data-bs-theme="dark"] .onboarding-dialog h2,.portal-layout[data-bs-theme="dark"] .help-header h2,.portal-layout[data-bs-theme="dark"] .help-quick-guide h3,.portal-layout[data-bs-theme="dark"] .help-manual h3{color:#e4ebf6}
+.portal-layout[data-bs-theme="dark"] .guide-eyebrow{color:#9bb9ff}
+.portal-layout[data-bs-theme="dark"] .guide-progress>span{background:#34425a}
+.portal-layout[data-bs-theme="dark"] .guide-progress>span.done{background:linear-gradient(90deg,#4779e0,#68a2f0)}
+.portal-layout[data-bs-theme="dark"] .guide-step-label,.portal-layout[data-bs-theme="dark"] .guide-revisit-note,.portal-layout[data-bs-theme="dark"] .help-header p,.portal-layout[data-bs-theme="dark"] .help-footer>span{color:#a5b1c2}
+.portal-layout[data-bs-theme="dark"] .onboarding-dialog>p,.portal-layout[data-bs-theme="dark"] .help-quick-guide p,.portal-layout[data-bs-theme="dark"] .help-manual p{color:#b8c5d8}
+.portal-layout[data-bs-theme="dark"] .guide-actions .guide-skip{color:#a5b1c2}
+.portal-layout[data-bs-theme="dark"] .help-header,.portal-layout[data-bs-theme="dark"] .help-tabs,.portal-layout[data-bs-theme="dark"] .help-footer{border-color:#34425a}
+.portal-layout[data-bs-theme="dark"] .help-tabs button{color:#b4c0d3}
+.portal-layout[data-bs-theme="dark"] .help-tabs button:hover,.portal-layout[data-bs-theme="dark"] .help-tabs button.active{background:#263754;color:#a9c4ff}
+.portal-layout[data-bs-theme="dark"] .help-quick-guide{border-color:#34425a;background:linear-gradient(120deg,#1c2a40,#172235)}
+.portal-layout[data-bs-theme="dark"] .help-faq-list details{border-color:#34425a;background:#1d2b40}
+.portal-layout[data-bs-theme="dark"] .help-faq-list summary{color:#d4e3fa}
+.portal-layout[data-bs-theme="dark"] .help-faq-list details[open] summary,.portal-layout[data-bs-theme="dark"] .help-manual h3{color:#a9c4ff}
+.portal-layout[data-bs-theme="dark"] .help-faq-list details[open] summary,.portal-layout[data-bs-theme="dark"] .help-manual article{border-color:#34425a}
+.portal-layout[data-bs-theme="dark"] .help-faq-list details p{color:#b8c5d8}
+.portal-layout[data-bs-theme="dark"] .help-manual .help-intro{border-color:#6791ee;background:#1d2b40}
+.portal-layout[data-bs-theme="dark"] .help-footer{background:#172235}
+.portal-layout[data-bs-theme="dark"] .portal-help-trigger>span{background:#263754;color:#a9c4ff}
+@media(max-width:760px){.portal-help-trigger{padding:.42rem .55rem;font-size:.69rem}.guide-overlay{padding:10px}.onboarding-dialog{padding:22px 18px}.help-header{padding:21px 18px 15px}.help-tabs{padding:9px 14px}.help-content{padding:16px;min-height:190px}.help-footer{padding:11px 15px}.guide-actions{gap:6px}.guide-actions .btn{font-size:.66rem;padding:.5rem .65rem}}
