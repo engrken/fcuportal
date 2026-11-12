@@ -497,3 +497,9 @@
 .portal-layout[data-bs-theme="dark"] .student-smart-search{border-color:#2e3b50}
 .portal-layout[data-bs-theme="dark"] .student-search-controls label{color:#a5b1c2}
 .portal-layout[data-bs-theme="dark"] .overview-report-heading{box-shadow:0 4px 14px rgba(0,0,0,.08)}
+
+.sidebar-app-mark{display:block;flex:none;width:38px;height:38px;border-radius:11px;object-fit:cover;box-shadow:0 6px 16px rgba(18,78,120,.22)}
+.sidebar-brand>span strong{color:var(--ink)}
+.sidebar-brand>span small{color:#0d7890;letter-spacing:.13em}
+.portal-layout[data-bs-theme="dark"] .sidebar-brand>span small{color:#69c7d5}
+@media(max-width:760px){.sidebar-app-mark{width:32px;height:32px;border-radius:9px}}
