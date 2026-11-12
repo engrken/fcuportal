@@ -56,7 +56,7 @@ export async function GET(request: Request) {
     prisma.assessment.findMany({
       where: { subject: subjectScope, title: { startsWith: "Attendance ·" }, dueDate: { gte: today } },
       orderBy: { dueDate: "asc" }, take: 8,
-      select: { id: true, title: true, dueDate: true, subject: { select: { id: true, code: true, title: true } } }
+      select: { id: true, title: true, dueDate: true, attendanceType: true, scheduleOverrideReason: true, subject: { select: { id: true, code: true, title: true } } }
     }),
     prisma.assessment.findMany({
       where: { subject: subjectScope, NOT: { title: { startsWith: "Attendance ·" } }, dueDate: { gte: today } },
@@ -96,13 +96,15 @@ export async function GET(request: Request) {
     provisional: subjects.filter(subject => subject.gradeStatus === "SUBMITTED").length,
     final: subjects.filter(subject => subject.gradeStatus === "VERIFIED").length
   };
-  const upcoming = (items: typeof upcomingAttendance) => items.map(item => ({
+  const upcoming = (items: typeof upcomingAttendance, isAttendance = false) => items.map(item => ({
     id: item.id,
-    title: item.title.replace(/^Attendance ·\s*/i, "Attendance"),
+    title: isAttendance ? "Attendance day" : item.title,
     date: item.dueDate?.toISOString() ?? null,
     subjectId: item.subject.id,
     code: item.subject.code,
-    subjectTitle: item.subject.title
+    subjectTitle: item.subject.title,
+    attendanceType: item.attendanceType,
+    scheduleOverrideReason: item.scheduleOverrideReason
   }));
   const todayWeekday = today.getUTCDay();
   const todayClasses = subjects.flatMap(subject => {
@@ -131,6 +133,6 @@ export async function GET(request: Request) {
     enrollment: subjects.map(subject => ({ id: subject.id, label: subject.classId || subject.code, title: subject.title, code: subject.code, count: subject.enrollments.length })),
     today: manilaDate,
     todayClasses,
-    upcoming: { attendance: upcoming(upcomingAttendance), assessments: upcoming(upcomingAssessments) }
+    upcoming: { attendance: upcoming(upcomingAttendance, true), assessments: upcoming(upcomingAssessments) }
   });
 }
