@@ -72,6 +72,7 @@ model User {
   email                   String
   passwordHash            String
   passwordChangedAt       DateTime?
+  emailVerifiedAt          DateTime?
   role                    Role
   schoolId                String
   fullName                String
@@ -301,4 +302,15 @@ model SecurityOtp {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, purpose, expiresAt])
+}
+
+model EmailVerificationChallenge {
+  id          String    @id
+  bindingHash String
+  codeHash    String
+  attempts    Int       @default(0)
+  expiresAt   DateTime
+  usedAt      DateTime?
+
+  @@index([expiresAt])
 }

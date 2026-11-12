@@ -6,13 +6,15 @@ import { createSession } from "@/lib/auth";
 import { checkAuthThrottle } from "@/lib/rate-limit";
 import { SCHOOL_PLAN_LIMITS } from "@/lib/plans";
 import type { School } from "@/generated/prisma/client";
+import { consumeEmailChallenge, emailVerificationFields, issueEmailChallenge } from "@/lib/email-verification";
 
 const bodySchema = z.object({
   schoolId: z.string().min(1).optional(), schoolName: z.string().trim().min(2).max(160).optional(),
   fullName: z.string().trim().min(2).max(120).optional(), email: z.string().trim().email().max(200),
   password: z.string().min(12).max(100), role: z.enum(["TEACHER", "STUDENT"]),
   studentNumber: z.string().trim().max(40).optional(), inviteCode: z.string().optional(), acknowledgedPrivacyNotice: z.literal(true),
-  acknowledgedTerms: z.literal(true), termsVersion: z.literal("2026-11-12")
+  acknowledgedTerms: z.literal(true), termsVersion: z.literal("2026-11-12"),
+  ...emailVerificationFields
 });
 
 function schoolIdentity(name: string) {
@@ -25,7 +27,7 @@ function schoolIdentity(name: string) {
 
 export async function POST(request: Request) {
   try {
-    const parsed = bodySchema.safeParse(await request.json());
+    const parsed = bodySchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
       if (parsed.error.issues.some(issue => issue.path[0] === "acknowledgedTerms" || issue.path[0] === "termsVersion")) {
         return NextResponse.json({ error: "Accept the current Terms of Service before creating your account." }, { status: 400 });
@@ -35,9 +37,13 @@ export async function POST(request: Request) {
       }
       return NextResponse.json({ error: "Check the required fields. Passwords must be at least 12 characters." }, { status: 400 });
     }
-    const { schoolId, schoolName, fullName, email, password, role, studentNumber, inviteCode, termsVersion } = parsed.data;
+    const { schoolId, schoolName, fullName, email, password, role, studentNumber, inviteCode, termsVersion, challengeId, code } = parsed.data;
     const normalizedEmail = email.toLowerCase();
-    const throttle = await checkAuthThrottle(request, `register:${role}:${normalizedEmail}`, 4);
+    if (Boolean(challengeId) !== Boolean(code)) return NextResponse.json({ error: "Request a code and enter all six digits." }, { status: 400 });
+    const phase = challengeId ? "verify" : "send";
+    const throttle = await checkAuthThrottle(request, `register:${phase}:${role}:${normalizedEmail}`, challengeId ? 8 : 4, undefined, "identity");
+    const network = await checkAuthThrottle(request, `register:${phase}:network`, 30);
+    if (!network.allowed) return NextResponse.json({ error: "Too many account creation attempts. Try again in 15 minutes." }, { status: 429 });
     if (!throttle.allowed) return NextResponse.json({ error: "Too many account creation attempts. Try again in 15 minutes." }, { status: 429 });
 
     if (role === "TEACHER" && (!process.env.TEACHER_INVITE_CODE || inviteCode !== process.env.TEACHER_INVITE_CODE)) {
@@ -57,8 +63,14 @@ export async function POST(request: Request) {
       }
     }
 
+    const binding = ["register", role, schoolId || "", schoolName?.trim().replace(/\s+/g, " ").toLowerCase() || "", normalizedStudentNumber || "", normalizedEmail];
+    if (!challengeId || !code) {
+      const id = await issueEmailChallenge(binding, normalizedEmail);
+      return NextResponse.json({ challengeId: id }, { status: 202, headers: { "Cache-Control": "no-store" } });
+    }
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await prisma.$transaction(async tx => {
+      if (!(await consumeEmailChallenge(tx, binding, challengeId, code))) return null;
       let school: School | null = null;
       if (role === "TEACHER") {
         const normalizedSchoolName = schoolName!.trim().replace(/\s+/g, " ");
@@ -81,10 +93,11 @@ export async function POST(request: Request) {
         if (!school) throw new Error("SCHOOL_NOT_READY");
       }
       if (!school) throw new Error("SCHOOL_NOT_READY");
-      const created = await tx.user.create({ data: { schoolId: school.id, fullName: studentProfile?.fullName ?? fullName!, email: normalizedEmail, passwordHash, role, studentNumber: role === "STUDENT" ? studentProfile?.studentNumber : null, courseProgram: studentProfile?.courseProgram ?? null, yearLevel: studentProfile?.yearLevel ?? null, privacyNoticeAcceptedAt: new Date(), termsAcceptedAt: new Date(), termsOfServiceVersion: termsVersion }, select: { id: true, role: true, schoolId: true } });
+      const created = await tx.user.create({ data: { schoolId: school.id, fullName: studentProfile?.fullName ?? fullName!, email: normalizedEmail, emailVerifiedAt: new Date(), passwordHash, role, studentNumber: role === "STUDENT" ? studentProfile?.studentNumber : null, courseProgram: studentProfile?.courseProgram ?? null, yearLevel: studentProfile?.yearLevel ?? null, privacyNoticeAcceptedAt: new Date(), termsAcceptedAt: new Date(), termsOfServiceVersion: termsVersion }, select: { id: true, role: true, schoolId: true } });
       if (studentProfile) await tx.enrollment.updateMany({ where: { studentNumber: studentProfile.studentNumber, studentUserId: null, subject: { schoolId: school.id } }, data: { studentUserId: created.id } });
       return created;
     });
+    if (!user) return NextResponse.json({ error: "The verification code is invalid, expired, or already used." }, { status: 400 });
     await createSession(user);
     return NextResponse.json({ ok: true, role: user.role }, { status: 201 });
   } catch (error) {
