@@ -26,7 +26,15 @@ function schoolIdentity(name: string) {
 export async function POST(request: Request) {
   try {
     const parsed = bodySchema.safeParse(await request.json());
-    if (!parsed.success) return NextResponse.json({ error: "Check the required fields. Passwords must be at least 12 characters." }, { status: 400 });
+    if (!parsed.success) {
+      if (parsed.error.issues.some(issue => issue.path[0] === "acknowledgedTerms" || issue.path[0] === "termsVersion")) {
+        return NextResponse.json({ error: "Accept the current Terms of Service before creating your account." }, { status: 400 });
+      }
+      if (parsed.error.issues.some(issue => issue.path[0] === "acknowledgedPrivacyNotice")) {
+        return NextResponse.json({ error: "Read and acknowledge the Privacy Notice before creating your account." }, { status: 400 });
+      }
+      return NextResponse.json({ error: "Check the required fields. Passwords must be at least 12 characters." }, { status: 400 });
+    }
     const { schoolId, schoolName, fullName, email, password, role, studentNumber, inviteCode, termsVersion } = parsed.data;
     const normalizedEmail = email.toLowerCase();
     const throttle = await checkAuthThrottle(request, `register:${role}:${normalizedEmail}`, 4);
