@@ -18,7 +18,7 @@ function parseHolidayFeed(ics: string, year: number): Holiday[] {
       date: `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`,
       name: unescapeIcs(summaryMatch[1]),
       localName: unescapeIcs(summaryMatch[1]),
-      types: ["Public holiday"],
+      types: ["Holiday or observance"],
     }];
   }).sort((a, b) => a.date.localeCompare(b.date));
 }
