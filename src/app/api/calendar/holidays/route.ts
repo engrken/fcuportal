@@ -1,9 +1,27 @@
-type NagerHoliday = {
-  date: string;
-  localName?: string;
-  name?: string;
-  types?: string[];
-};
+type Holiday = { date: string; name: string; localName: string; types: string[] };
+
+function unescapeIcs(value: string) {
+  return value.replace(/\\n/gi, " ").replace(/\\,/g, ",").replace(/\\;/g, ";").replace(/\\\\/g, "\\").trim();
+}
+
+function parseHolidayFeed(ics: string, year: number): Holiday[] {
+  const unfolded = ics.replace(/\r?\n[ \t]/g, "");
+  const events = unfolded.match(/BEGIN:VEVENT[\s\S]*?END:VEVENT/g) || [];
+  return events.flatMap(event => {
+    const dateMatch = event.match(/^DTSTART(?:;[^:]*)?:(\d{8})/m);
+    const summaryMatch = event.match(/^SUMMARY(?:;[^:]*)?:(.+)$/m);
+    if (!dateMatch || !summaryMatch) return [];
+    const rawDate = dateMatch[1];
+    const eventYear = Number(rawDate.slice(0, 4));
+    if (eventYear !== year) return [];
+    return [{
+      date: `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`,
+      name: unescapeIcs(summaryMatch[1]),
+      localName: unescapeIcs(summaryMatch[1]),
+      types: ["Public holiday"],
+    }];
+  }).sort((a, b) => a.date.localeCompare(b.date));
+}
 
 export const revalidate = 86400;
 
@@ -15,17 +33,14 @@ export async function GET(request: Request) {
   }
 
   try {
-    const response = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/PH`, {
-      headers: { Accept: "application/json" },
+    const url = "https://calendar.google.com/calendar/ical/en.philippines%23holiday%40group.v.calendar.google.com/public/basic.ics";
+    const response = await fetch(url, {
+      headers: { Accept: "text/calendar" },
       next: { revalidate: 86400 },
     });
     if (!response.ok) throw new Error(`Holiday provider returned ${response.status}`);
-    const data = await response.json() as NagerHoliday[];
-    const holidays = data
-      .filter(item => /^\\d{4}-\\d{2}-\\d{2}$/.test(item.date))
-      .map(item => ({ date: item.date, name: item.name || item.localName || "Public holiday", localName: item.localName, types: item.types || [] }))
-      .sort((a, b) => a.date.localeCompare(b.date));
-    return Response.json({ holidays, source: "Nager.Date", countryCode: "PH", year }, {
+    const holidays = parseHolidayFeed(await response.text(), year);
+    return Response.json({ holidays, source: "Google Calendar public holiday feed", countryCode: "PH", year }, {
       headers: { "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=604800" },
     });
   } catch {
