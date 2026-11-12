@@ -58,14 +58,14 @@ export function PhilippineHolidayCalendar({ selectedDate, onSelect }: { selected
         const value = dateValue(day);
         const holiday = holidayByDate.get(value);
         const isSelected = value === selectedDate;
-        return <button key={value} type="button" role="gridcell" aria-pressed={isSelected} aria-label={holiday ? `${monthNames[month.month]} ${day}, ${month.year}, ${holiday.localName || holiday.name} public holiday` : `${monthNames[month.month]} ${day}, ${month.year}`} title={holiday ? holiday.localName || holiday.name : undefined} className={`ph-calendar-day${isSelected ? " is-selected" : ""}${holiday ? " is-holiday" : ""}`} onClick={() => onSelect(value)}>
+        return <button key={value} type="button" role="gridcell" aria-pressed={isSelected} aria-label={holiday ? `${monthNames[month.month]} ${day}, ${month.year}, ${holiday.localName || holiday.name} holiday or observance` : `${monthNames[month.month]} ${day}, ${month.year}`} title={holiday ? holiday.localName || holiday.name : undefined} className={`ph-calendar-day${isSelected ? " is-selected" : ""}${holiday ? " is-holiday" : ""}`} onClick={() => onSelect(value)}>
           {day}{holiday && <span className="ph-holiday-dot" aria-hidden="true" />}
         </button>;
       })}
     </div>
-    <div className="ph-calendar-legend"><span className="ph-holiday-dot" aria-hidden="true" /> Philippine public holiday</div>
+    <div className="ph-calendar-legend"><span className="ph-holiday-dot" aria-hidden="true" /> Philippine holiday or observance</div>
     <div className="ph-calendar-holiday-note" aria-live="polite">
-      {loading ? "Loading Philippine holidays…" : loadError ? "Holiday dates are temporarily unavailable." : selectedHoliday ? <><b>{selectedHoliday.localName || selectedHoliday.name}</b><span>{selectedHoliday.types?.join(", ") || "Philippine public holiday"}</span></> : "Select a date to see whether it is a public holiday."}
+      {loading ? "Loading Philippine holidays…" : loadError ? "Holiday dates are temporarily unavailable." : selectedHoliday ? <><b>{selectedHoliday.localName || selectedHoliday.name}</b><span>{selectedHoliday.types?.join(", ") || "Philippine holiday or observance"}</span></> : "Select a date to see whether it is a holiday or observance."}
     </div>
   </section>;
 }
