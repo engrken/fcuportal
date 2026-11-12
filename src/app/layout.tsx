@@ -4,7 +4,8 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "SAGA Portal | School Assessment, Grading & Analytics",
-  description: "A practical grade portal for teachers to manage class records, assessment, attendance, and student grade access."
+  description: "A practical grade portal for teachers to manage class records, assessment, attendance, and student grade access.",
+  icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" }
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
