@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   const classCount = await prisma.subject.count({ where: { schoolId: teacher.schoolId, academicYear: parsed.data.academicYear } });
   const classLimit = SCHOOL_PLAN_LIMITS[school?.plan || "FREE"].classes;
   if (classCount >= classLimit) return NextResponse.json({ error: `Your school plan allows ${classLimit} classes. Upgrade the school plan to add another class.` }, { status: 402 });
-  const subject = await prisma.subject.create({ data: { ...parsed.data, schoolId: teacher.schoolId, teacherId: teacher.id, gradeBands: { create: SAMPLE_GRADE_BANDS.map((band, sortOrder) => ({ ...band, sortOrder })) } } });
+  const subject = await prisma.subject.create({ data: { ...parsed.data, term: parsed.data.term === "Trimester" ? "3rd Semester" : parsed.data.term, schoolId: teacher.schoolId, teacherId: teacher.id, gradeBands: { create: SAMPLE_GRADE_BANDS.map((band, sortOrder) => ({ ...band, sortOrder })) } } });
   await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "created", entity: "subject", entityId: subject.id } });
   return NextResponse.json({ subject }, { status: 201 });
 }
