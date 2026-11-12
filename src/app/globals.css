@@ -585,3 +585,16 @@
 .portal-layout[data-bs-theme="dark"] .help-footer{background:#172235}
 .portal-layout[data-bs-theme="dark"] .portal-help-trigger>span{background:#263754;color:#a9c4ff}
 @media(max-width:760px){.portal-help-trigger{padding:.42rem .55rem;font-size:.69rem}.guide-overlay{padding:10px}.onboarding-dialog{padding:22px 18px}.help-header{padding:21px 18px 15px}.help-tabs{padding:9px 14px}.help-content{padding:16px;min-height:190px}.help-footer{padding:11px 15px}.guide-actions{gap:6px}.guide-actions .btn{font-size:.66rem;padding:.5rem .65rem}}
+
+
+/* Keep Record Scores headings readable in the fixed-width workbook columns. */
+.portal-layout .score-sheet thead th{overflow-wrap:break-word!important;word-break:normal!important;hyphens:auto;line-height:1.15}
+.portal-layout .score-sheet-category span{display:block;text-wrap:balance;word-break:normal}
+.portal-layout .score-sheet-category small,
+.portal-layout .score-sheet-subcategory small,
+.portal-layout .score-sheet-assessment small{overflow-wrap:break-word!important;word-break:normal!important;line-height:1.15}
+.portal-layout .score-sheet-assessment span{max-height:2.4em;overflow:hidden;overflow-wrap:break-word;word-break:normal;line-height:1.15;text-wrap:balance}
+.portal-layout .score-sheet-category,
+.portal-layout .score-sheet-subcategory,
+.portal-layout .score-sheet-assessment{padding:7px 4px;vertical-align:middle}
+@media(max-width:760px){.portal-layout .score-sheet thead th{padding:4px 2px;line-height:1.1}.portal-layout .score-sheet-category small,.portal-layout .score-sheet-subcategory small{font-size:.45rem}}
