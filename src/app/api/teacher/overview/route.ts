@@ -56,7 +56,7 @@ export async function GET(request: Request) {
     prisma.assessment.findMany({
       where: { subject: subjectScope, title: { startsWith: "Attendance ·" }, dueDate: { gte: today } },
       orderBy: { dueDate: "asc" }, take: 8,
-      select: { id: true, title: true, dueDate: true, attendanceType: true, scheduleOverrideReason: true, subject: { select: { id: true, code: true, title: true } } }
+      select: { id: true, title: true, dueDate: true, attendanceType: true, scheduleOverrideReason: true, scores: { select: { remark: true } }, subject: { select: { id: true, code: true, title: true, _count: { select: { enrollments: true } } } } }
     }),
     prisma.assessment.findMany({
       where: { subject: subjectScope, NOT: { title: { startsWith: "Attendance ·" } }, dueDate: { gte: today } },
@@ -104,7 +104,9 @@ export async function GET(request: Request) {
     code: item.subject.code,
     subjectTitle: item.subject.title,
     attendanceType: item.attendanceType,
-    scheduleOverrideReason: item.scheduleOverrideReason
+    scheduleOverrideReason: item.scheduleOverrideReason,
+    markedCount: isAttendance ? item.scores.filter(score => ["PRESENT", "ABSENT", "EXCUSED"].includes(score.remark || "")).length : undefined,
+    studentCount: isAttendance ? item.subject._count.enrollments : undefined
   }));
   const todayWeekday = today.getUTCDay();
   const todayClasses = subjects.flatMap(subject => {
