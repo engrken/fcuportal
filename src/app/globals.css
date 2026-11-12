@@ -263,3 +263,38 @@
 
 /* Highlight the row currently under the pointer or being edited in every roster and score list. */
 .grade-table tbody>tr:hover>*,.grade-table tbody>tr:focus-within>*,.score-sheet tbody>tr:hover>*,.score-sheet tbody>tr:focus-within>*{background-color:#e3edff}.grade-table tbody>tr>*,.score-sheet tbody>tr>*{transition:background-color .12s ease}.mobile-score-student:hover,.mobile-score-student:focus-within{background:#e3edff;border-color:#9bb8ef;box-shadow:0 3px 12px rgba(36,88,211,.1)}
+
+
+/* Theme-aware row feedback for roster tables and score lists. */
+.portal-layout .grade-table tbody>tr:nth-child(odd)>*,
+.portal-layout .ecr-table tbody>tr:nth-child(odd)>*,
+.portal-layout .attendance-table tbody>tr:nth-child(odd)>*{background-color:#fff}
+.portal-layout .grade-table tbody>tr:nth-child(even)>*,
+.portal-layout .ecr-table tbody>tr:nth-child(even)>*,
+.portal-layout .attendance-table tbody>tr:nth-child(even)>*{background-color:#f3f5f7}
+.portal-layout table tbody>tr:hover>*,
+.portal-layout table tbody>tr:focus-within>*{background-color:#e3edff!important;transition:background-color .12s ease}
+.portal-layout .mobile-score-student:hover,
+.portal-layout .mobile-score-student:focus-within{background:#e3edff;border-color:#9bb8ef;box-shadow:0 3px 12px rgba(36,88,211,.1)}
+.portal-layout[data-bs-theme="dark"] .grade-table tbody>tr:nth-child(odd)>*,
+.portal-layout[data-bs-theme="dark"] .ecr-table tbody>tr:nth-child(odd)>*,
+.portal-layout[data-bs-theme="dark"] .attendance-table tbody>tr:nth-child(odd)>*{background-color:#172235}
+.portal-layout[data-bs-theme="dark"] .grade-table tbody>tr:nth-child(even)>*,
+.portal-layout[data-bs-theme="dark"] .ecr-table tbody>tr:nth-child(even)>*,
+.portal-layout[data-bs-theme="dark"] .attendance-table tbody>tr:nth-child(even)>*{background-color:#1b2a40}
+.portal-layout[data-bs-theme="dark"] table tbody>tr:hover>*,
+.portal-layout[data-bs-theme="dark"] table tbody>tr:focus-within>*{background-color:#2a3b58!important;color:#f1f5fb}
+.portal-layout[data-bs-theme="dark"] .mobile-score-student:hover,
+.portal-layout[data-bs-theme="dark"] .mobile-score-student:focus-within{background:#2a3b58;border-color:#6687bd;box-shadow:0 3px 12px rgba(0,0,0,.2)}
+
+/* Keep utility overlays and record panels consistent with the portal theme. */
+.portal-layout[data-bs-theme="dark"] .modal-card,
+.portal-layout[data-bs-theme="dark"] .grade-history-list article{background:#172235;color:#e4ebf6;border-color:#34425a}
+.portal-layout[data-bs-theme="dark"] .schedule-builder{background:#172235;color:#e4ebf6;border-color:#34425a}
+.portal-layout[data-bs-theme="dark"] .schedule-row{border-color:#34425a}
+.portal-layout[data-bs-theme="dark"] .attendance-alert-panel{background:#332b19;border-color:#70581f;color:#f5dfa5}
+.portal-layout[data-bs-theme="dark"] .attendance-alert-list span{background:#252f40;color:#e4ebf6}
+.portal-layout[data-bs-theme="dark"] .attendance-alert-panel small,
+.portal-layout[data-bs-theme="dark"] .grade-history-list small{color:#a5b1c2}
+.portal-layout[data-bs-theme="dark"] .bulk-preview-scroll{border-color:#34425a}
+.portal-layout[data-bs-theme="dark"] .bulk-preview-scroll table{--bs-table-bg:#172235;--bs-table-color:#e4ebf6;--bs-table-border-color:#34425a}
