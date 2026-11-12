@@ -8,11 +8,12 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate deploy; fi && prisma generate && next build",
+    "build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate status; fi && prisma generate && next build",
     "postinstall": "prisma generate",
     "start": "next start",
     "db:push": "prisma db push",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "db:migrate": "prisma migrate deploy"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",
