@@ -444,3 +444,56 @@
 .portal-layout[data-bs-theme="dark"] .overview-work-meta>i.status.pending{background:#303b4d;color:#c4cee0}
 .portal-layout[data-bs-theme="dark"] .overview-work-meta>i.status.progress{background:#44351d;color:#f2ce83}
 .portal-layout[data-bs-theme="dark"] .overview-work-meta>i.status.complete{background:#19372d;color:#9fe0bb}
+
+
+/* Compact the teacher overview so key activity metrics appear earlier on screen. */
+.welcome-strip{min-height:150px;padding:24px 30px;border-radius:16px;background:linear-gradient(112deg,#204784 0%,#2c5dcc 72%,#376bdd 100%)}
+.welcome-strip h2{font-size:1.65rem;margin:5px 0 7px}
+.welcome-strip p{font-size:.82rem;line-height:1.5}
+.welcome-decoration{right:18%;font-size:112px}
+.welcome-strip .btn{padding:11px 16px;border-radius:10px;font-weight:750}
+.student-smart-search{margin:16px 0 18px;padding:19px 22px!important;border-radius:15px!important}
+.student-smart-search>.section-heading{margin-bottom:10px}
+.student-smart-search>.section-heading h2{font-size:.98rem}
+.student-smart-search>.section-heading p{font-size:.72rem}
+.student-search-controls{gap:10px}
+.student-search-controls label{gap:5px;font-size:.65rem}
+.student-search-controls .form-control,.student-search-controls .form-select{min-height:40px;font-size:.82rem}
+.student-search-hint{padding:7px 0 0;font-size:.68rem}
+.overview-report-heading{margin:0 0 14px;padding:16px 20px;border-radius:14px}
+.overview-report-heading:after{display:none}
+.overview-report-heading h2{font-size:1.35rem}
+.overview-report-heading p{font-size:.7rem}
+.overview-date-controls{padding-left:14px;gap:7px}
+.overview-date-controls input{min-width:132px;min-height:38px;font-size:.77rem}
+.overview-date-controls .btn{min-height:38px;padding:7px 11px;font-size:.69rem}
+.overview-stat-grid{gap:12px;margin-bottom:23px}
+.overview-stat-card{min-height:104px;padding:15px 18px 14px 20px}
+.overview-stat-card strong{font-size:1.65rem}
+.overview-chart-card,.overview-upcoming-card{box-shadow:0 4px 14px rgba(32,58,98,.035)!important}
+@media(max-width:900px){
+  .welcome-strip{min-height:140px;padding:22px 24px}
+  .student-smart-search{padding:17px!important}
+}
+@media(max-width:760px){
+  .welcome-strip{min-height:132px;padding:19px;gap:10px}
+  .welcome-strip h2{font-size:1.42rem}
+  .welcome-strip p{font-size:.74rem}
+  .welcome-decoration{right:6%;font-size:90px}
+  .student-smart-search{margin:13px 0 16px;padding:15px!important}
+  .overview-report-heading{padding:15px}
+  .overview-date-controls{padding-top:10px}
+  .overview-stat-grid{margin-bottom:19px}
+}
+@media(max-width:520px){
+  .welcome-strip{align-items:flex-start}
+  .welcome-strip .btn{padding:8px 11px;font-size:.68rem}
+  .welcome-decoration{right:4%;top:8px;font-size:72px}
+  .student-search-controls{grid-template-columns:1fr 1fr}
+  .overview-date-controls{grid-template-columns:1fr 1fr}
+  .overview-date-controls label{min-width:0}
+  .overview-date-controls input{min-width:0}
+}
+.portal-layout[data-bs-theme="dark"] .student-smart-search{border-color:#2e3b50}
+.portal-layout[data-bs-theme="dark"] .student-search-controls label{color:#a5b1c2}
+.portal-layout[data-bs-theme="dark"] .overview-report-heading{box-shadow:0 4px 14px rgba(0,0,0,.08)}
