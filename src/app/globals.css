@@ -414,3 +414,25 @@
 .portal-layout[data-bs-theme="dark"] .overview-chart-card,.portal-layout[data-bs-theme="dark"] .overview-upcoming-card,.portal-layout[data-bs-theme="dark"] .overview-stat-card{border-color:#34425a!important}
 .portal-layout[data-bs-theme="dark"] .overview-upcoming-card li button:hover{background:#202f46}
 @media(max-width:760px){.overview-report-heading{align-items:stretch;flex-direction:column;padding:17px}.overview-report-heading:after{right:-30px;top:-35px}.overview-date-controls{padding:13px 0 0;border-top:1px solid #dce5f1;border-left:0}.overview-stat-grid{gap:10px;margin-bottom:23px}.overview-stat-card{min-height:100px;padding:14px 12px 13px 16px}.overview-stat-card strong{font-size:1.55rem}.overview-section-heading{align-items:flex-start}.overview-section-heading>span{font-size:.6rem}.overview-chart-grid,.overview-upcoming-grid{gap:11px}.portal-layout[data-bs-theme="dark"] .overview-date-controls{border-top-color:#34445c}}
+
+
+/* Upcoming Work rows present names, dates, and attendance mode as separate signals. */
+.overview-upcoming-card .overview-work-list{display:grid;gap:0;margin:12px 0 0}
+.overview-upcoming-card .overview-work-list>li+li{border-top:1px solid #edf0f4}
+.overview-upcoming-card .overview-work-item{align-items:center;padding:12px 9px}
+.overview-upcoming-card .overview-work-item:hover{background:#f3f7fd}
+.overview-work-copy{display:grid;min-width:0;gap:4px}
+.overview-work-copy>b{color:#203451;font-size:.72rem;font-weight:800}
+.overview-work-copy>small{color:#748197;font-size:.63rem;line-height:1.35;white-space:normal}
+.overview-work-meta{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:2px}
+.overview-work-meta>i{padding:3px 7px;border-radius:20px;background:#edf3ff;color:#3b5f9a;font-size:.55rem;font-style:normal;font-weight:700}
+.overview-work-meta>i.makeup{background:#fff4df;color:#98640f}
+.overview-work-item>time{flex:none;padding:6px 9px;border:1px solid #e5eaf2;border-radius:8px;background:#fff;color:#64748b;font-size:.61rem;font-weight:700;white-space:nowrap}
+.portal-layout[data-bs-theme="dark"] .overview-upcoming-card .overview-work-list>li+li{border-color:#34425a}
+.portal-layout[data-bs-theme="dark"] .overview-upcoming-card .overview-work-item:hover{background:#202f46}
+.portal-layout[data-bs-theme="dark"] .overview-work-copy>b{color:#e4ebf6}
+.portal-layout[data-bs-theme="dark"] .overview-work-copy>small{color:#a5b1c2}
+.portal-layout[data-bs-theme="dark"] .overview-work-meta>i{background:#263754;color:#b8ccf4}
+.portal-layout[data-bs-theme="dark"] .overview-work-meta>i.makeup{background:#44351d;color:#f2ce83}
+.portal-layout[data-bs-theme="dark"] .overview-work-item>time{border-color:#34425a;background:#172235;color:#bcc8da}
+@media(max-width:520px){.overview-upcoming-card .overview-work-item{align-items:flex-start;gap:8px}.overview-upcoming-card .overview-work-item>time{font-size:.56rem}.overview-work-meta{gap:4px}}
