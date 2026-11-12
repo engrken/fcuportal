@@ -80,6 +80,8 @@ model User {
   courseProgram           String?
   yearLevel               String?
   privacyNoticeAcceptedAt DateTime?
+  termsAcceptedAt         DateTime?
+  termsOfServiceVersion   String?
   createdAt               DateTime             @default(now())
   updatedAt               DateTime             @updatedAt
   school                  School               @relation(fields: [schoolId], references: [id], onDelete: Restrict)
