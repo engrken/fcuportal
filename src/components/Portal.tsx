@@ -2,12 +2,15 @@
 import { Fragment, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import ChangeEmailForm from "./ChangeEmailForm";
 import GradeVisibilityManager from "./GradeVisibilityManager";
 import GradeContributionPanel from "./GradeContributionPanel";
-import GradeWhatIfSimulator from "./GradeWhatIfSimulator";
-import { HelpCenter, OnboardingGuide } from "./PortalGuides";
-import { PhilippineHolidayCalendar } from "./PhilippineHolidayCalendar";
+// These large interactive tools are only downloaded when opened.
+const GradeWhatIfSimulator = dynamic(() => import("./GradeWhatIfSimulator"));
+const HelpCenter = dynamic(() => import("./PortalGuides").then(module => module.HelpCenter));
+const OnboardingGuide = dynamic(() => import("./PortalGuides").then(module => module.OnboardingGuide));
+const PhilippineHolidayCalendar = dynamic(() => import("./PhilippineHolidayCalendar").then(module => module.PhilippineHolidayCalendar));
 import { calculateCategoryPercent, calculateFinal, calculateGradeBreakdown, convertRawPercent, remainingChildAllocation } from "@/lib/grades";
 import { classWorkspaceHref, resolveClassSelection, type ClassSection } from "@/lib/class-navigation";
 import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
