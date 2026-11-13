@@ -5,18 +5,41 @@ import { prisma } from "@/lib/prisma";
 import { createSession, tenantManagerIdentity } from "@/lib/auth";
 import { consumeEmailChallenge, emailVerificationFields, issueEmailChallenge } from "@/lib/email-verification";
 import { checkAuthThrottle, clearAuthThrottle } from "@/lib/rate-limit";
+import { resolveLoginIdentifier } from "@/lib/account-identifiers";
 
-const schema = z.object({ schoolId: z.string().min(1), email: z.string().trim().email().max(200), password: z.string().min(1).max(100), ...emailVerificationFields });
+const schema = z.object({
+  schoolId: z.string().min(1),
+  loginType: z.enum(["EMAIL", "STUDENT_ID"]).default("EMAIL"),
+  identifier: z.string().trim().min(1).max(200).optional(),
+  email: z.string().trim().max(200).optional(), // legacy email sign-in payload
+  password: z.string().min(1).max(100),
+  ...emailVerificationFields
+});
 export async function POST(request: Request) {
   const input = schema.safeParse(await request.json().catch(() => null));
-  if (!input.success) return NextResponse.json({ error: "Enter a valid email and password." }, { status: 400 });
-  const throttle = await checkAuthThrottle(request, `login:${input.data.schoolId}:${input.data.email.toLowerCase()}`, 8);
+  if (!input.success) return NextResponse.json({ error: "Select a school and enter your sign-in details." }, { status: 400 });
+  const identity = resolveLoginIdentifier(input.data.loginType, input.data.identifier ?? input.data.email ?? "");
+  if (!identity) return NextResponse.json({
+    error: input.data.loginType === "STUDENT_ID" ? "Enter a valid Student ID." : "Enter a valid email address."
+  }, { status: 400 });
+  const throttle = await checkAuthThrottle(request, `login:${input.data.schoolId}:${identity.type}:${identity.value}`, 8);
   if (!throttle.allowed) {
     console.warn("SECURITY_EVENT SAGA_LOGIN_THROTTLED");
     return NextResponse.json({ error: "Too many sign-in attempts. Try again in 15 minutes." }, { status: 429 });
   }
-  const user = await prisma.user.findUnique({ where: { schoolId_email: { schoolId: input.data.schoolId, email: input.data.email.toLowerCase() } } });
-  if (!user || !(await bcrypt.compare(input.data.password, user.passwordHash))) return NextResponse.json({ error: "Email or password is incorrect." }, { status: 401 });
+  const user = identity.type === "STUDENT_ID"
+    ? await prisma.user.findUnique({
+        where: { schoolId_studentNumber: { schoolId: input.data.schoolId, studentNumber: identity.value } }
+      })
+    : await prisma.user.findUnique({
+        where: { schoolId_email: { schoolId: input.data.schoolId, email: identity.value } }
+      });
+  // Student IDs may only authenticate student accounts. The same number in
+  // another school must never resolve a user in this tenant.
+  if (!user || (identity.type === "STUDENT_ID" && user.role !== "STUDENT") ||
+      !(await bcrypt.compare(input.data.password, user.passwordHash))) {
+    return NextResponse.json({ error: "Invalid sign-in credentials." }, { status: 401 });
+  }
   const school = await prisma.school.findUnique({ where: { id: user.schoolId }, select: { isActive: true, subscriptionStatus: true, subscriptionExpiresAt: true } });
   if (!school?.isActive || school.subscriptionStatus !== "ACTIVE" || (school.subscriptionExpiresAt && school.subscriptionExpiresAt <= new Date())) return NextResponse.json({ error: "This school workspace is inactive or its subscription has expired. Contact SAGA support." }, { status: 403 });
   const { challengeId, code } = input.data;
