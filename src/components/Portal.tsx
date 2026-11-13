@@ -1231,7 +1231,8 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
         </>}
       </section>}
       </div></main>
-          {printMode && detail && user.school.slug === "fcu" && <article className="print-grade-sheet fcu-print-sheet">
+          {printMode && user.school.slug === "fcu" && <style media="print">{`@page { size: 8.5in 13in portrait; margin: 0.393in 0.197in 0.236in 0.275in; }`}</style>}
+      {printMode && detail && user.school.slug === "fcu" && <article className="print-grade-sheet fcu-print-sheet">
         <img className="fcu-print-official-header" src="/fcu-grading-header.png" alt="FCU-EOMS-RO-006-F Graduate School / Collegiate Grading Sheet" />
         <table className="fcu-print-course-table"><tbody>
           <tr><th>Course No.</th><td>{detail.code}</td><th colSpan={2}>Descriptive Title</th><td colSpan={2}>{detail.title}</td></tr>
