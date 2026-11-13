@@ -1500,8 +1500,11 @@ body.saga-app-body:has(.portal-layout.sidebar-collapsed)>.saga-site-footer{paddi
 }
 /* Teacher: compact, focused navy/blue learning workspace and warm highlights. */
 .portal-layout[data-saga-role="teacher"] .welcome-strip{
-  background:linear-gradient(115deg,#e6effd 0%,#f7f9fe 80%);border-color:#dce8f8
+  background:linear-gradient(115deg,#e6effd 0%,#f7f9fe 80%);
+  border-color:#dce8f8;color:#183d67
 }
+.portal-layout[data-saga-role="teacher"] .welcome-strip p{color:#486684}
+.portal-layout[data-saga-role="teacher"] .welcome-strip .eyebrow{color:#466d98}
 .portal-layout[data-saga-role="teacher"] .topbar .crumb{color:#416b9e}
 .portal-layout[data-saga-role="teacher"] .sidebar-brand strong{color:#244d7b}
 .portal-layout[data-saga-role="teacher"] .stat-card{
@@ -1556,6 +1559,9 @@ body.saga-app-body:has(.portal-layout.sidebar-collapsed)>.saga-site-footer{paddi
   --saga-role-surface:#1b393e;--saga-role-border:#345557;
   --saga-role-ink:#c8f2ec;--saga-role-background:#101e24
 }
+.portal-layout[data-bs-theme="dark"][data-saga-role] .content-wrap{
+  background:var(--saga-role-background)
+}
 .portal-layout[data-bs-theme="dark"][data-saga-role] .side-link.selected{
   color:var(--saga-role-ink);background:var(--saga-role-surface)
 }
@@ -1578,8 +1584,11 @@ body.saga-app-body:has(.portal-layout.sidebar-collapsed)>.saga-site-footer{paddi
   --bs-btn-hover-color:#f1fafc
 }
 .portal-layout[data-bs-theme="dark"][data-saga-role="teacher"] .welcome-strip{
-  background:linear-gradient(115deg,#1d304e,#18263e);border-color:#355171
+  background:linear-gradient(115deg,#1d304e,#18263e);
+  border-color:#355171;color:#eff6ff
 }
+.portal-layout[data-bs-theme="dark"][data-saga-role="teacher"] .welcome-strip p{color:#c6d7ed}
+.portal-layout[data-bs-theme="dark"][data-saga-role="teacher"] .welcome-strip .eyebrow{color:#adcaf1}
 .portal-layout[data-bs-theme="dark"][data-saga-role="teacher"] .stat-card{
   background:#1b2a41;border-color:#324761
 }
