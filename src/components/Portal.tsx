@@ -195,7 +195,7 @@ function downloadXlsx(filename: string, sheetName: string, headers: string[], ro
   const link = document.createElement("a"); link.href = url; link.download = filename; link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail: Detail, categories: Category[], logoPath?: string | null) {
+async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail: Detail, categories: Category[], teacherName: string) {
   // The FCU template contains one complete header image, not independent text cells.
   // Use the same artwork in Print and Excel; no external IMAGE() formula required.
   let logoPng: Uint8Array | null = null;
@@ -211,6 +211,13 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
   // The supplied ISO template uses A:K, with student names merged across A:D.
   // E:H are grading components, I is Total Grade, J is Final Grade, K is Remarks.
   const gradeSlots = Math.max(4, categories.length);
+  // FCU's original form reserves E:H for components. When fewer than four
+  // components are configured, merge unused slots into the visible columns.
+  const componentRanges = categories.map((category, index) => ({
+    category,
+    start: 4 + Math.floor(index * gradeSlots / categories.length),
+    end: 3 + Math.floor((index + 1) * gradeSlots / categories.length)
+  }));
   const columnCount = gradeSlots + 7;
   const last = excelColumn(columnCount - 1);
   const totalCol = columnCount - 3;
@@ -222,48 +229,80 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
   };
   for (let i = 0; i < 9; i++) row([]); // A1:K9: official university header image
   row([]);
-  row([{ col: 0, value: "Course No.    " + detail.code + "        Descriptive Title    " + detail.title, style: 2 }]);
-  row([{ col: 0, value: "________________________________________________________________________________", style: 0 }]);
-  row([{ col: 0, value: "Class I.D.    " + (detail.classId || "—") + "        Semester    " + detail.term + "        Academic Year    " + detail.academicYear, style: 2 }]);
-  row([{ col: 0, value: "---------------------------------------------------------------------------------------------------------------", style: 6 }]);
+  row([{ col: 0, value: { runs: [
+    { text: "Course No.  " },
+    { text: "  " + detail.code + "     ", underline: true },
+    { text: "    Descriptive Title  " },
+    { text: "   " + detail.title + "                                      ", underline: true }
+  ] }, style: 2 }]);
+  row([{ col: 0, value: "_______________________________________________   ", style: 2 }]);
+  row([{ col: 0, value: { runs: [
+    { text: "Class I.D.  " },
+    { text: "  " + (detail.classId || "—") + "    ", underline: true },
+    { text: "          Semester  " },
+    { text: "  " + detail.term + "    ", underline: true },
+    { text: "          Academic Year  " },
+    { text: "  " + detail.academicYear + "   ", underline: true }
+  ] }, style: 2 }]);
+  row([{ col: 0, value: "-----------------------------------------------------------------------------------------------------------------------------------------------", style: 6 }]);
   row([
     { col: 0, value: "NAME OF STUDENTS", style: 4 },
-    ...categories.map((category, index) => ({ col: index + 4, value: ": " + category.name.toUpperCase() + " :", style: 4 })),
+    ...componentRanges.map(range => ({ col: range.start, value: ": " + range.category.name.toUpperCase() + " :", style: 4 })),
     { col: totalCol, value: ": TG :", style: 4 },
     { col: totalCol + 1, value: ": FG :", style: 4 },
     { col: totalCol + 2, value: ": REMARKS :", style: 4 }
   ]);
-  row([{ col: 0, value: "---------------------------------------------------------------------------------------------------------------", style: 6 }]);
+  row([{ col: 0, value: "-----------------------------------------------------------------------------------------------------------------------------------------------", style: 6 }]);
   for (const [index, enrollment] of detail.enrollments.entries()) {
     const band = detail.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent).find(item => enrollment.finalPercent !== null && enrollment.finalPercent >= item.minPercent);
     const suppress = ["INC", "DROPPED"].includes(enrollment.remarks || "");
-    const componentValues = categories.map((category, componentIndex) => {
-      const percent = weightedCategoryPercent(enrollment, category, detail.categories, detail.assessments);
-      return { col: componentIndex + 4, value: suppress || percent === null ? "" : Number((percent * effectiveCategoryWeight(category, detail.categories) / 100).toFixed(2)), style: 5 };
+    const componentValues = componentRanges.map(range => {
+      const percent = weightedCategoryPercent(enrollment, range.category, detail.categories, detail.assessments);
+      return { col: range.start, value: suppress || percent === null ? "" : Number((percent * effectiveCategoryWeight(range.category, detail.categories) / 100).toFixed(2)), style: 5 };
     });
+    const gradeString = suppress ? "" : enrollment.finalGradeOverride || band?.finalGrade || "";
+    const gradeNumber = gradeString && /^\\d+(?:\\.\\d+)?$/.test(gradeString) ? Number(gradeString) : gradeString;
     row([
       { col: 0, value: (index + 1) + ". " + enrollment.studentName.toLocaleUpperCase(), style: 5 },
       ...componentValues,
       { col: totalCol, value: suppress || enrollment.finalPercent === null ? "" : Number(enrollment.finalPercent.toFixed(2)), style: 5 },
-      { col: totalCol + 1, value: suppress ? "" : enrollment.finalGradeOverride || band?.finalGrade || "", style: 5 },
-      { col: totalCol + 2, value: enrollment.remarks || band?.remarks || "", style: 5 }
+      { col: totalCol + 1, value: gradeNumber, style: 5 },
+      { col: totalCol + 2, value: (enrollment.remarks || band?.remarks) ? ":   " + (enrollment.remarks || band?.remarks) + "   :" : "", style: 6 }
     ]);
   }
+  // The official workbook places two signature columns below the grading list.
+  row([]);
+  row([{ col: 0, value: "Submitted by:                                                                         Noted:", style: 2 }]);
+  row([]);
+  row([{ col: 0, value: { runs: [
+    { text: "              " + teacherName.toLocaleUpperCase() + "              ", underline: true },
+    { text: "                           ________________________________", underline: true }
+  ] }, style: 2 }]);
+  row([{ col: 0, value: "TEACHER'S SIGNATURE OVER PRINTED NAME                         DEAN'S SIGNATURE OVER PRINTED NAME", style: 2 }]);
   const xmlRows = cells.map((values, rowIndex) => {
     const rowNumber = rowIndex + 1;
     const xmlCells = values.map((cell, colIndex) => {
       const reference = `${excelColumn(colIndex)}${rowNumber}`;
       if (typeof cell.value === "number" && Number.isFinite(cell.value)) return `<c r="${reference}" s="${cell.style}"><v>${cell.value}</v></c>`;
+      if (cell.value && typeof cell.value === "object" && "runs" in cell.value) {
+        const runs = (cell.value as { runs: Array<{ text: string; underline?: boolean }> }).runs;
+        return `<c r="${reference}" s="${cell.style}" t="inlineStr"><is>${runs.map(run => `<r><rPr><rFont val="Arial"/><sz val="11"/>${run.underline ? '<u/>' : ''}</rPr><t xml:space="preserve">${xmlEscape(run.text)}</t></r>`).join("")}</is></c>`;
+      }
       const text = xmlEscape(cell.value);
       return `<c r="${reference}" s="${cell.style}" t="inlineStr"><is><t xml:space="preserve">${text}</t></is></c>`;
     }).join("");
-    const height = rowIndex < 9 ? ' ht="15.5" customHeight="1"' : rowIndex === 13 || rowIndex === 15 ? ' ht="11" customHeight="1"' : ' ht="15" customHeight="1"';
+    const height = rowIndex < 9 ? ' ht="15.5" customHeight="1"' : rowIndex === 13 ? ' ht="10.95" customHeight="1"' : rowIndex === 15 ? ' ht="10.05" customHeight="1"' : rowIndex >= 16 && rowIndex < 16 + detail.enrollments.length ? ' ht="13.8" customHeight="1"' : ' ht="15" customHeight="1"';
     return `<row r="${rowNumber}"${height}>${xmlCells}</row>`;
   }).join("");
   const merges = [
     "A1:" + last + "9", "A11:" + last + "11", "A12:" + last + "12", "A13:" + last + "13",
     "A14:" + last + "14", "A15:D15", "A16:" + last + "16",
-    ...detail.enrollments.map((_, index) => "A" + (index + 17) + ":D" + (index + 17))
+    ...detail.enrollments.map((_, index) => "A" + (index + 17) + ":D" + (index + 17)),
+    ...componentRanges.flatMap(range => range.start === range.end ? [] : [
+      excelColumn(range.start) + "15:" + excelColumn(range.end) + "15",
+      ...detail.enrollments.map((_, index) => excelColumn(range.start) + (index + 17) + ":" + excelColumn(range.end) + (index + 17))
+    ]),
+    ...[detail.enrollments.length + 18, detail.enrollments.length + 20, detail.enrollments.length + 21].map(index => "A" + index + ":" + last + index)
   ];
   const mergeXml = merges.map(range => '<mergeCell ref="' + range + '"/>').join("");
   const widths = '<cols><col min="1" max="1" width="8.44" customWidth="1"/>' +
@@ -282,6 +321,7 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
     '<drawing r:id="rId1"/></worksheet>';
   const styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<numFmts count="1"><numFmt numFmtId="164" formatCode="&quot;:   &quot;0.00&quot;  :&quot;"/></numFmts>' +
     '<fonts count="3"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font><font><b/><sz val="15"/><name val="Arial"/></font></fonts>' +
     '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>' +
     '<borders count="3"><border><left/><right/><top/><bottom/><diagonal/></border>' +
@@ -293,8 +333,8 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
     '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
     '<xf numFmtId="0" fontId="1" fillId="0" borderId="2" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
-    '<xf numFmtId="2" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>' +
-    '<xf numFmtId="0" fontId="0" fillId="0" borderId="2" xfId="0" applyBorder="1"/>' +
+    '<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="2" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
     '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
   const safeSheetName = sheetName.replace(/[\\/?*\[\]:]/g, " ").slice(0, 31) || "FCU Grades";
   const files = [
@@ -752,7 +792,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   function exportGrades() {
     if (!detail) return;
     if (user.school.slug === "fcu") {
-      void downloadFcuGradeXlsx(`${detail.code.replace(/[^a-z0-9-_]+/gi,"-")}-fcu-grading-sheet.xlsx`, "FCU Grading Sheet", detail, printCategories, schoolLogoPath);
+      void downloadFcuGradeXlsx(`${detail.code.replace(/[^a-z0-9-_]+/gi,"-")}-fcu-grading-sheet.xlsx`, "FCU Grading Sheet", detail, printCategories, user.fullName);
       return;
     }
     const assessmentColumns = detail.assessments.map(item => `${categoryPath(detail.categories.find(category => category.id === item.categoryId)!, detail.categories)} — ${item.title} [${item.dueDate ? new Date(item.dueDate).toLocaleDateString() : "No date"}; ${item.maxScore} points]`);
