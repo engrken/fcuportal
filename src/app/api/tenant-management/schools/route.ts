@@ -3,18 +3,73 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireTenantManager } from "@/lib/auth";
 
+// Keep the dashboard lightweight as schools and class rosters grow. Do not
+// download every Subject just to calculate the number of enrollments.
 export async function GET() {
   const manager = await requireTenantManager();
   if (!manager) return NextResponse.json({ error: "Tenant manager access is not enabled for this account." }, { status: 403 });
-  const schools = await prisma.school.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
-      users: { where: { role: "TEACHER" }, select: { id: true, fullName: true, email: true, createdAt: true } },
-      subjects: { select: { id: true, _count: { select: { enrollments: true } } } },
-      tenantPayments: { orderBy: { paidAt: "desc" }, take: 5 }
-    }
+
+  const [schools, enrollmentCounts, accountCounts, verifiedCounts, classCounts, paymentTotals] = await Promise.all([
+    prisma.school.findMany({
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true, name: true, shortName: true, slug: true,
+        plan: true, isActive: true, subscriptionStatus: true,
+        subscriptionExpiresAt: true, createdAt: true, updatedAt: true,
+        _count: { select: { subjects: true, users: true, studentDirectory: true } },
+        users: {
+          where: { role: "TEACHER" },
+          orderBy: { createdAt: "desc" },
+          take: 8,
+          select: { id: true, fullName: true, email: true, emailVerifiedAt: true, createdAt: true }
+        },
+        tenantPayments: { orderBy: { paidAt: "desc" }, take: 5 }
+      }
+    }),
+    prisma.$queryRaw<Array<{ schoolId: string; studentSeats: bigint }>>`
+      SELECT s."schoolId" AS "schoolId", COUNT(e."id") AS "studentSeats"
+      FROM "Subject" s
+      LEFT JOIN "Enrollment" e ON e."subjectId" = s."id"
+      GROUP BY s."schoolId"
+    `,
+    prisma.user.groupBy({ by: ["schoolId", "role"], _count: { _all: true } }),
+    prisma.user.groupBy({
+      by: ["schoolId", "role"],
+      where: { emailVerifiedAt: { not: null } },
+      _count: { _all: true }
+    }),
+    prisma.subject.groupBy({ by: ["schoolId", "isPublished"], _count: { _all: true } }),
+    prisma.tenantPayment.groupBy({
+      by: ["schoolId"],
+      _sum: { amount: true },
+      _count: { _all: true }
+    })
+  ]);
+
+  const seats = new Map(enrollmentCounts.map(entry => [entry.schoolId, Number(entry.studentSeats)]));
+  const accounts = new Map(accountCounts.map(entry => [`${entry.schoolId}:${entry.role}`, entry._count._all]));
+  const verified = new Map(verifiedCounts.map(entry => [`${entry.schoolId}:${entry.role}`, entry._count._all]));
+  const visible = new Map(classCounts.filter(entry => entry.isPublished).map(entry => [entry.schoolId, entry._count._all]));
+  const payments = new Map(paymentTotals.map(entry => [entry.schoolId, entry]));
+
+  const data = schools.map(school => {
+    const payment = payments.get(school.id);
+    return {
+      ...school,
+      studentSeats: seats.get(school.id) ?? 0,
+      classCount: school._count.subjects,
+      publishedClasses: visible.get(school.id) ?? 0,
+      directoryCount: school._count.studentDirectory,
+      teacherCount: accounts.get(`${school.id}:TEACHER`) ?? 0,
+      verifiedTeacherCount: verified.get(`${school.id}:TEACHER`) ?? 0,
+      studentCount: accounts.get(`${school.id}:STUDENT`) ?? 0,
+      verifiedStudentCount: verified.get(`${school.id}:STUDENT`) ?? 0,
+      totalPayments: payment?._sum.amount ?? 0,
+      paymentCount: payment?._count._all ?? 0,
+      _count: undefined
+    };
   });
-  return NextResponse.json({ schools: schools.map(school => ({ ...school, studentSeats: school.subjects.reduce((sum, subject) => sum + subject._count.enrollments, 0), subjects: undefined })) });
+  return NextResponse.json({ schools: data }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 const updateSchema = z.object({
