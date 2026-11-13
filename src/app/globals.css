@@ -1129,3 +1129,24 @@
   .fcu-print-sheet .fcu-print-grade-table tbody tr { break-inside: avoid; }
   .fcu-print-sheet .print-signatures { break-inside: avoid; }
 }
+
+
+/* FCU ISO reference workbook styling. The header is the actual graphic from the
+ * approved FCU-EOMS-RO-006-F template, not a manually re-created table. */
+@media print {
+  .fcu-print-sheet { font-family: Arial, Helvetica, sans-serif !important; font-size: 8pt !important; }
+  .fcu-print-sheet .fcu-print-official-header { display: block; width: 100%; height: auto; object-fit: contain; margin: 0 0 9px; }
+  .fcu-print-sheet .fcu-print-course-table { width: 100%; table-layout: auto; margin: 3px 0 11px; font-size: 8pt; }
+  .fcu-print-sheet .fcu-print-course-table th { width: auto; }
+  .fcu-print-sheet .fcu-print-grade-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 7.8pt; }
+  .fcu-print-sheet .fcu-print-grade-table th,
+  .fcu-print-sheet .fcu-print-grade-table td { background: #fff !important; color: #000 !important; border: 0 !important; border-bottom: 1px dotted #444 !important; padding: 2px 4px; vertical-align: middle; overflow-wrap: anywhere; }
+  .fcu-print-sheet .fcu-print-grade-table th { font-weight: normal; border-top: 1px dashed #333 !important; border-bottom: 1px dashed #333 !important; white-space: normal; font-size: 7.5pt; }
+  .fcu-print-sheet .fcu-print-grade-table th:first-child,
+  .fcu-print-sheet .fcu-print-grade-table td:first-child { width: 35%; text-align: left; }
+  .fcu-print-sheet .fcu-print-grade-table th:nth-child(2),
+  .fcu-print-sheet .fcu-print-grade-table td:nth-child(2) { width: auto; text-align: center; }
+  .fcu-print-sheet .fcu-print-grade-table td:not(:first-child) { text-align: center; }
+  .fcu-print-sheet .fcu-print-grade-table tbody tr { break-inside: avoid; }
+  .fcu-print-sheet .print-signatures { margin-top: 14px; break-inside: avoid; }
+}
