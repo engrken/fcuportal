@@ -24,7 +24,7 @@ export async function GET(request: Request, { params }: Context) {
   const rows = await prisma.auditEvent.findMany({
     where: {
       OR: [
-        { actor: { schoolId } },
+        { actor: { schoolId }, entity: { not: "score" } },
         { entity: "school", entityId: schoolId }
       ]
     },
