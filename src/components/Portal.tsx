@@ -379,7 +379,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   const [bulkScoresOpen, setBulkScoresOpen] = useState(false); const [bulkFileName, setBulkFileName] = useState(""); const [bulkOperations, setBulkOperations] = useState<Array<{enrollmentId:string;assessmentId:string;points:number|null;remark:"EXCUSED"|"ABSENT"|"DID_NOT_SUBMIT"|null}>>([]); const [bulkRowsPreview, setBulkRowsPreview] = useState<Array<{row:number;student:string;studentNumber:string;cells:number;errors:string[]}>>([]); const [bulkErrors, setBulkErrors] = useState<string[]>([]);
   const [gradeChangeEnrollmentId, setGradeChangeEnrollmentId] = useState(""); const [gradeChangeGrade, setGradeChangeGrade] = useState("AUTO"); const [gradeChangeRemark, setGradeChangeRemark] = useState("AUTO"); const [gradeChangeReason, setGradeChangeReason] = useState("");
   const [attendanceQuickOpenId, setAttendanceQuickOpenId] = useState(initialAttendanceToday && initialClassId ? initialClassId : "");
-  const [showWeightBreakdown, setShowWeightBreakdown] = useState(true);
+  const [showWeightBreakdown, setShowWeightBreakdown] = useState(false);
   const [visibilityManagerQuery, setVisibilityManagerQuery] = useState<string | null>(null);
   const [simulatingGradeId, setSimulatingGradeId] = useState<string | null>(null);
   useEffect(() => { if (!notice && !err) return; const timer = window.setTimeout(() => { setNotice(""); setErr(""); }, err ? 20000 : 5500); return () => window.clearTimeout(timer); }, [notice, err]);
