@@ -3,17 +3,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { calculateCategoryPercent, calculateFinal, equivalentFromBands, LECTURE_LAB_GRADING_TEMPLATE, LECTURE_ONLY_GRADING_TEMPLATE, LABORATORY_ONLY_GRADING_TEMPLATE } from "@/lib/grades";
+import { calculateCategoryPercent, calculateFinal, equivalentFromBands, LECTURE_LAB_GRADING_TEMPLATE, LECTURE_ONLY_GRADING_TEMPLATE, LABORATORY_ONLY_GRADING_TEMPLATE, expectedChildAllocation, remainingChildAllocation, firstOverallocatedCategoryGroup } from "@/lib/grades";
 import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
 
 type Context = { params: Promise<{ subjectId: string }> };
 async function ownedSubject(subjectId: string, teacherId: string, schoolId: string) {
   return prisma.subject.findFirst({ where: { id: subjectId, teacherId, schoolId }, include: { categories: { orderBy: { sortOrder: "asc" } }, gradeBands: { orderBy: { sortOrder: "asc" } }, assessments: { orderBy: { createdAt: "asc" } }, enrollments: { orderBy: { studentName: "asc" }, include: { scores: true, gradeChangeHistory: { orderBy: { createdAt: "desc" }, include: { actor: { select: { fullName: true } } } } } } } });
-}
-function expectedChildAllocation(parentId: string | null, categories: Array<{ id: string; parentId?: string | null; weight: number }>) {
-  if (!parentId) return 100;
-  const parent = categories.find(category => category.id === parentId);
-  return parent?.parentId ? parent.weight : 100;
 }
 export async function GET(_request: Request, context: Context) {
   const teacher = await requireRole("TEACHER"); if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -23,7 +18,8 @@ export async function GET(_request: Request, context: Context) {
   return NextResponse.json({ subject: { ...subject, enrollments: details } });
 }
 
-const categorySchema = z.object({ categories: z.array(z.object({ id: z.string(), parentId: z.string().nullable().optional(), name: z.string().trim().min(1).max(80), weight: z.number().min(0).max(100), conversionBase: z.number().min(1).max(100) })).min(1).max(40) });
+const categoryValuesSchema = z.array(z.object({ id: z.string(), parentId: z.string().nullable().optional(), name: z.string().trim().min(1).max(80), weight: z.number().min(0).max(100), conversionBase: z.number().min(1).max(100) })).max(40);
+const categorySchema = z.object({ categories: categoryValuesSchema.min(1) });
 const newCategorySchema = z.object({ name: z.string().trim().min(1).max(80), parentId: z.string().nullable().optional(), weight: z.number().min(0).max(100).optional(), conversionBase: z.number().min(1).max(100).optional() });
 const rosterSchema = z.object({ students: z.array(z.object({ studentName: z.string().trim().min(2).max(120), studentNumber: z.string().trim().max(40).optional() })).min(1).max(100) });
 const enrollmentUpdateSchema = z.object({ updateEnrollment: z.object({ enrollmentId: z.string(), studentName: z.string().trim().min(2).max(120), studentNumber: z.string().trim().max(40).nullable().optional() }) });
@@ -356,19 +352,60 @@ export async function POST(request: Request, context: Context) {
   if (subject.gradeStatus === "VERIFIED") return NextResponse.json({ error: "This grade record has been finalized. Recall it before making changes." }, { status: 409 });
   const input = await request.json();
   if ("category" in input) {
-    const parsed = newCategorySchema.safeParse(input.category); if (!parsed.success) return NextResponse.json({ error: "Provide a category name." }, { status: 400 });
+    const parsed = newCategorySchema.safeParse(input.category);
+    if (!parsed.success) return NextResponse.json({ error: "Provide a valid subcategory name and weight." }, { status: 400 });
     const parentId = parsed.data.parentId || null;
     if (parentId && !subject.categories.some(category => category.id === parentId)) return NextResponse.json({ error: "Parent category not found." }, { status: 404 });
     if (parentId && subject.assessments.some(assessment => assessment.categoryId === parentId)) return NextResponse.json({ error: "Move assessment items out of this category before adding subcategories." }, { status: 409 });
-    const siblings = subject.categories.filter(category => (category.parentId ?? null) === parentId);
-    if (subject.categories.some(category => category.name.toLocaleLowerCase() === parsed.data.name.toLocaleLowerCase())) return NextResponse.json({ error: "A category with that name already exists in this class." }, { status: 409 });
-    const expected = expectedChildAllocation(parentId, subject.categories);
-    const allocated = siblings.reduce((sum, category) => sum + category.weight, 0);
-    const requested = parsed.data.weight ?? Math.max(0, expected - allocated);
-    if (requested > expected - allocated + 0.01) return NextResponse.json({ error: `Only ${(expected - allocated).toFixed(2)}% remains ${parentId ? "within this parent" : "in the course total"}.` }, { status: 400 });
-    const parentBase = parentId ? subject.categories.find(item => item.id === parentId)?.conversionBase ?? 50 : 50;
-    const category = await prisma.gradeCategory.create({ data: { subjectId, parentId, name: parsed.data.name, weight: requested, conversionBase: parsed.data.conversionBase ?? parentBase, sortOrder: siblings.length } });
-    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "created grading category", entity: "grade-category", entityId: category.id } });
+    if (subject.categories.length >= 40) return NextResponse.json({ error: "This class already has the maximum of 40 grading categories." }, { status: 400 });
+
+    // The teacher may have edited existing weights without saving the full path.
+    // Use those edits for validation and persist them atomically with the new child.
+    let existingCategories = subject.categories.map(category => ({
+      id: category.id, parentId: category.parentId, name: category.name,
+      weight: category.weight, conversionBase: category.conversionBase
+    }));
+    if ("existingCategories" in input) {
+      const draft = categoryValuesSchema.safeParse(input.existingCategories);
+      if (!draft.success) return NextResponse.json({ error: "Invalid pending grading edits. Check category names and percentages." }, { status: 400 });
+      const ids = new Set(draft.data.map(category => category.id));
+      const originalById = new Map(subject.categories.map(category => [category.id, category]));
+      if (draft.data.length !== subject.categories.length || ids.size !== subject.categories.length ||
+        draft.data.some(category => !originalById.has(category.id))) {
+        return NextResponse.json({ error: "The grading setup changed. Refresh the class before adding a subcategory." }, { status: 409 });
+      }
+      if (draft.data.some(category => (category.parentId ?? null) !== originalById.get(category.id)?.parentId)) {
+        return NextResponse.json({ error: "Cannot change category parents while adding a subcategory." }, { status: 400 });
+      }
+      existingCategories = draft.data.map(category => ({ ...category, parentId: category.parentId ?? null }));
+    }
+
+    const names = [...existingCategories.map(category => category.name.toLocaleLowerCase()), parsed.data.name.toLocaleLowerCase()];
+    if (new Set(names).size !== names.length) return NextResponse.json({ error: "Category names must be unique within a class." }, { status: 409 });
+    const invalid = firstOverallocatedCategoryGroup(existingCategories);
+    if (invalid) {
+      const parentName = invalid.parentId ? existingCategories.find(category => category.id === invalid.parentId)?.name || "Parent" : "Course";
+      return NextResponse.json({ error: `${parentName} is over-allocated (${invalid.allocated.toFixed(2)}% / ${invalid.expected.toFixed(2)}%). Adjust the weights before adding another category.` }, { status: 400 });
+    }
+
+    const remaining = remainingChildAllocation(parentId, existingCategories);
+    const requested = parsed.data.weight ?? remaining;
+    if (requested > remaining + 0.01) {
+      return NextResponse.json({ error: `Only ${remaining.toFixed(2)}% remains ${parentId ? "within this parent" : "in the course total"}. Reduce the new subcategory weight or an existing allocation.` }, { status: 400 });
+    }
+    const siblings = existingCategories.filter(category => (category.parentId ?? null) === parentId);
+    const parentBase = parentId ? existingCategories.find(category => category.id === parentId)?.conversionBase ?? 50 : 50;
+    const category = await prisma.$transaction(async tx => {
+      const originals = new Map(subject.categories.map(item => [item.id, item]));
+      for (const item of existingCategories) {
+        const previous = originals.get(item.id)!;
+        if (previous.name !== item.name || previous.weight !== item.weight || previous.conversionBase !== item.conversionBase) {
+          await tx.gradeCategory.update({ where: { id: item.id }, data: { name: item.name, weight: item.weight, conversionBase: item.conversionBase } });
+        }
+      }
+      return tx.gradeCategory.create({ data: { subjectId, parentId, name: parsed.data.name, weight: requested, conversionBase: parsed.data.conversionBase ?? parentBase, sortOrder: siblings.length } });
+    });
+    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "created grading category and saved pending grading edits", entity: "grade-category", entityId: category.id } });
     return NextResponse.json({ category }, { status: 201 });
   }
   if ("students" in input) {

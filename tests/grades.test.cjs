@@ -11,7 +11,7 @@ const compiled = ts.transpileModule(source, {
 }).outputText;
 const calculatorExports = {};
 new Function("exports", "module", compiled)(calculatorExports, { exports: calculatorExports });
-const { calculateCategoryPercent, calculateGradeBreakdown, calculateFinal, convertRawPercent } = calculatorExports;
+const { calculateCategoryPercent, calculateGradeBreakdown, calculateFinal, convertRawPercent, expectedChildAllocation, remainingChildAllocation, firstOverallocatedCategoryGroup } = calculatorExports;
 const scored = (points, maxScore = 100, title = "Exam", remark = null, weight = null) =>
   ({ title, maxScore, weight, scores: [{ points, remark }] });
 const pending = (maxScore = 100, title = "Exam", weight = null) =>
@@ -152,4 +152,24 @@ test("displayed earned course parts add to displayed final percent", () => {
 test("fully recorded perfect course returns 100 across nested categories", () => {
   const c=[cat("lec",null,60),cat("exam","lec",25,[scored(100)]),cat("quiz","lec",75,[scored(100)]),cat("lab",null,40),cat("experiment","lab",100,[scored(100)])];
   assert.equal(calculateFinal(c),100);
+});
+
+test("adding a subcategory uses pending edits, not stale saved category allocations", () => {
+  const saved = [
+    { id: "laboratory", parentId: null, weight: 100 },
+    { id: "periodic", parentId: "laboratory", weight: 50 },
+    { id: "midterm", parentId: "periodic", weight: 20 },
+    { id: "output", parentId: "periodic", weight: 30 },
+    { id: "exercises", parentId: "laboratory", weight: 50 }
+  ];
+  const edited = saved.map(category => category.id === "exercises" ? { ...category, weight: 15 } : category);
+  assert.equal(remainingChildAllocation("laboratory", saved), 0);
+  assert.equal(remainingChildAllocation("laboratory", edited), 35);
+  assert.equal(expectedChildAllocation("periodic", edited), 50);
+  assert.equal(remainingChildAllocation("periodic", edited), 0);
+  const withAttendance = [...edited, { id: "attendance", parentId: "laboratory", weight: 10 }];
+  assert.equal(remainingChildAllocation("laboratory", withAttendance), 25);
+  assert.equal(firstOverallocatedCategoryGroup(withAttendance), null);
+  const excessive = [...edited, { id: "attendance", parentId: "laboratory", weight: 36 }];
+  assert.deepEqual(firstOverallocatedCategoryGroup(excessive), { parentId: "laboratory", allocated: 101, expected: 100 });
 });

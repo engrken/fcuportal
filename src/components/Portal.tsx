@@ -8,7 +8,7 @@ import GradeContributionPanel from "./GradeContributionPanel";
 import GradeWhatIfSimulator from "./GradeWhatIfSimulator";
 import { HelpCenter, OnboardingGuide } from "./PortalGuides";
 import { PhilippineHolidayCalendar } from "./PhilippineHolidayCalendar";
-import { calculateCategoryPercent, calculateFinal, calculateGradeBreakdown, convertRawPercent } from "@/lib/grades";
+import { calculateCategoryPercent, calculateFinal, calculateGradeBreakdown, convertRawPercent, remainingChildAllocation } from "@/lib/grades";
 import { classWorkspaceHref, resolveClassSelection, type ClassSection } from "@/lib/class-navigation";
 import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
 import { buildWorkbookPages, workbookWidths } from "@/lib/scorebook-layout";
@@ -606,7 +606,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   }
   async function addCategory(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); if (!detail) return;
-    await run(async () => { const result = await api(`/api/teacher/subjects/${detail.id}`, { method: "POST", body: JSON.stringify({ category: { name: categoryName, parentId: categoryParent || null, weight: Number(categoryWeight) } }) }); setDetail(current => current ? { ...current, categories: [...current.categories, result.category] } : current); setCategoryName(""); setCategoryParent(""); setCategoryWeight("0"); setCategoryOpen(false); }, "Category added under its parent. Review the allocation, then save the grading path.");
+    await run(async () => { const result = await api(`/api/teacher/subjects/${detail.id}`, { method: "POST", body: JSON.stringify({ category: { name: categoryName, parentId: categoryParent || null, weight: Number(categoryWeight) }, existingCategories: detail.categories }) }); setDetail(current => current ? { ...current, categories: [...current.categories, result.category] } : current); setCategoryName(""); setCategoryParent(""); setCategoryWeight("0"); setCategoryOpen(false); }, "Category added under its parent. Review the allocation, then save the grading path.");
   }
   async function removeCategory(categoryId: string) {
     if (!detail || !window.confirm("Remove this empty category?")) return;
@@ -927,17 +927,12 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     return { graded, average, passing: graded.filter(item => (item.finalPercent ?? 0) >= 75).length, atRisk: graded.filter(item => (item.finalPercent ?? 0) >= 60 && (item.finalPercent ?? 0) < 75).length, failing: graded.filter(item => (item.finalPercent ?? 0) < 60).length, attendanceDanger: detail.enrollments.filter(item => attendanceSummary(item, detail.assessments).atRisk).length, leader: [...graded].sort((a, b) => (b.finalPercent ?? 0) - (a.finalPercent ?? 0))[0] || null, bands };
   }, [detail]);
 
-  const remainingWeight = (parentId: string | null, exceptId?: string) => {
-    if (!detail) return 0;
-    const parent = parentId ? detail.categories.find(item => item.id === parentId) : null;
-    const target = !parent || !parent.parentId ? 100 : parent.weight;
-    const used = detail.categories.filter(item => (item.parentId ?? null) === parentId && item.id !== exceptId).reduce((sum, item) => sum + item.weight, 0);
-    return Math.max(0, target - used);
-  };
+  const remainingWeight = (parentId: string | null, exceptId?: string) =>
+    detail ? remainingChildAllocation(parentId, detail.categories, exceptId) : 0;
   const renderCategoryForm = (parent: Category | null): ReactNode => <form className="category-create-form category-path-form" onSubmit={addCategory}>
     <div><label className="form-label">{parent ? "Subcategory name" : "Course group name"}</label><input className="form-control" value={categoryName} onChange={e=>setCategoryName(e.target.value)} placeholder={parent ? "e.g. Midterm Exam, Final Exam" : "e.g. Lecture, Laboratory"} required maxLength={80}/></div>
     <div><label className="form-label">Parent category</label><div className="form-control bg-body-secondary">{parent ? categoryPath(parent, detail?.categories || []) : "Top level · course allocation"}</div></div>
-    <div><label className="form-label">{parent ? `Weight within ${rootCategory(parent, detail?.categories || []).name} (%)` : "Weight of course (%)"}</label><div className="input-group"><input className="form-control" type="number" min="0" max={remainingWeight(parent?.id || null)} step="0.5" value={categoryWeight} onChange={e=>setCategoryWeight(e.target.value)} required/><span className="input-group-text">%</span></div><small className="muted">{remainingWeight(parent?.id || null).toFixed(2)}% remains in this allocation. First-level categories total 100%; deeper subcategories total their parent’s weight.</small></div>
+    <div><label className="form-label">{parent ? `Weight within ${rootCategory(parent, detail?.categories || []).name} (%)` : "Weight of course (%)"}</label><div className="input-group"><input className="form-control" type="number" min="0" max={remainingWeight(parent?.id || null)} step="0.5" value={categoryWeight} onChange={e=>setCategoryWeight(e.target.value)} required/><span className="input-group-text">%</span></div><small className="muted">{remainingWeight(parent?.id || null).toFixed(2)}% remains in this allocation. First-level categories total 100%; deeper subcategories total their parent’s weight. Adding saves any unsaved edits to existing grading categories.</small></div>
     <div className="category-path-actions"><button type="button" className="btn btn-outline-secondary btn-sm" onClick={()=>setCategoryOpen(false)}>Cancel</button><button className="btn btn-primary btn-sm" disabled={busy||remainingWeight(parent?.id||null)<=0||Number(categoryWeight)>remainingWeight(parent?.id||null)}>Add to parent</button></div>
   </form>;
   const renderCategoryBranch = (category: Category, depth = 0): ReactNode => {

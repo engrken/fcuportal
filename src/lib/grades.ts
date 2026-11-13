@@ -1,5 +1,32 @@
 export type GradeCategoryInput = { name: string; weight: number; conversionBase: number };
 
+/** Category weights below the course roots are percentage points within the
+ * root group. Grandchildren divide their direct parent's allocation. */
+export type GradeAllocationCategory = { id: string; parentId?: string | null; weight: number };
+
+export function expectedChildAllocation(parentId: string | null, categories: GradeAllocationCategory[]) {
+  if (!parentId) return 100;
+  const parent = categories.find(category => category.id === parentId);
+  return parent?.parentId ? parent.weight : 100;
+}
+
+export function remainingChildAllocation(parentId: string | null, categories: GradeAllocationCategory[], exceptId?: string) {
+  const expected = expectedChildAllocation(parentId, categories);
+  const used = categories.filter(category => (category.parentId ?? null) === parentId && category.id !== exceptId)
+    .reduce((sum, category) => sum + category.weight, 0);
+  return Math.max(0, expected - used);
+}
+
+export function firstOverallocatedCategoryGroup(categories: GradeAllocationCategory[]) {
+  for (const parentId of new Set(categories.map(category => category.parentId ?? null))) {
+    const allocated = categories.filter(category => (category.parentId ?? null) === parentId)
+      .reduce((sum, category) => sum + category.weight, 0);
+    const expected = expectedChildAllocation(parentId, categories);
+    if (allocated > expected + 0.01) return { parentId, allocated, expected };
+  }
+  return null;
+}
+
 export const SAMPLE_CATEGORIES: GradeCategoryInput[] = [
   { name: "Design", weight: 20, conversionBase: 50 },
   { name: "Program Flow", weight: 30, conversionBase: 50 },
