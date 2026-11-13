@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import AccountMenu, { type AccountTheme } from "./AccountMenu";
 import { csvCell, daysUntil, tenantHealth, todayManila } from "@/lib/tenant-operations";
 
 type Payment = {
@@ -47,7 +49,10 @@ function downloadSchoolReport(tenants: Tenant[]) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export default function TenantManagement({ managerName, managerEmail }: { managerName: string; managerEmail: string }) {
+export default function TenantManagement({ managerName, managerEmail, managerSchoolSlug, managerProfileImagePath }: {
+  managerName: string; managerEmail: string; managerSchoolSlug: string; managerProfileImagePath: string | null;
+}) {
+  const router = useRouter();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [selected, setSelected] = useState("");
   const [plan, setPlan] = useState<Plan>("FREE");
@@ -99,10 +104,15 @@ export default function TenantManagement({ managerName, managerEmail }: { manage
     const saved = window.localStorage.getItem("saga-portal-theme");
     if (saved === "light" || saved === "dark") setTheme(saved);
   }, []);
-  function toggleTheme() {
-    const next = theme === "light" ? "dark" : "light";
+  function setAppearance(next: AccountTheme) {
     window.localStorage.setItem("saga-portal-theme", next);
     setTheme(next);
+  }
+  async function logout() {
+    const response = await fetch("/api/auth/logout", { method: "POST" });
+    if (!response.ok) throw new Error("Could not sign out.");
+    router.replace("/login");
+    router.refresh();
   }
 
   const active = tenants.find(tenant => tenant.id === selected) ?? null;
@@ -235,11 +245,19 @@ export default function TenantManagement({ managerName, managerEmail }: { manage
         <p className="text-secondary mb-0">Schools, access, subscriptions, adoption, and audit-ready records.</p>
       </div>
       <div className="tenant-admin-controls">
-        <div><b>{managerName}</b><small>{managerEmail}</small></div>
-        <button type="button" className="btn btn-outline-secondary btn-sm" onClick={toggleTheme} aria-label={theme === "light" ? "Switch to dark theme" : "Switch to light theme"}>{theme === "light" ? "◐ Dark" : "☼ Light"}</button>
         <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => void load(true)} disabled={refreshing || loading || busy}>
           {refreshing ? "Refreshing…" : "Refresh data"}
         </button>
+        <AccountMenu
+          fullName={managerName}
+          email={managerEmail}
+          role="Teacher"
+          profileImagePath={managerProfileImagePath}
+          theme={theme}
+          onThemeChange={setAppearance}
+          onEditProfile={() => router.push(`/${encodeURIComponent(managerSchoolSlug)}/profile`)}
+          onLogout={logout}
+        />
       </div>
     </header>
 
