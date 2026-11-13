@@ -99,9 +99,21 @@ export async function PATCH(request: Request) {
   if (school.id === manager.schoolId && subscriptionStatus !== "ACTIVE") return NextResponse.json({ error: "The tenant manager’s own school workspace cannot be suspended from this account." }, { status: 409 });
   if (payment && (!payment.amount || !payment.method)) return NextResponse.json({ error: "A payment record needs an amount and payment method." }, { status: 400 });
   const expiry = subscriptionExpiresAt ? new Date(subscriptionExpiresAt) : null;
-  if (subscriptionExpiresAt && (!expiry || Number.isNaN(expiry.getTime()))) return NextResponse.json({ error: "Choose a valid subscription expiry date." }, { status: 400 });
+  if (subscriptionExpiresAt && (!/^\\d{4}-\\d{2}-\\d{2}$/.test(subscriptionExpiresAt) || !expiry || Number.isNaN(expiry.getTime()) || expiry.toISOString().slice(0, 10) !== subscriptionExpiresAt)) {
+    return NextResponse.json({ error: "Choose a valid subscription expiry date." }, { status: 400 });
+  }
   const now = new Date();
-  await prisma.$transaction(async tx => {
+  try {
+    await prisma.$transaction(async tx => {
+    if (payment?.amount && payment.reference) {
+      // A submitted bank/reference number should not be recorded twice for
+      // the same school after a network retry. Optional reference remains allowed.
+      const previous = await tx.tenantPayment.findFirst({
+        where: { schoolId, reference: payment.reference },
+        select: { id: true }
+      });
+      if (previous) throw new Error("DUPLICATE_PAYMENT_REFERENCE");
+    }
     await tx.school.update({ where: { id: schoolId }, data: { plan, subscriptionStatus, isActive: subscriptionStatus === "ACTIVE", subscriptionExpiresAt: expiry } });
     if (payment?.amount && payment.method) await tx.tenantPayment.create({ data: {
       schoolId, amount: payment.amount, method: payment.method,
@@ -111,6 +123,12 @@ export async function PATCH(request: Request) {
       note: payment.note || null, recordedBy: manager.email
     } });
     await tx.auditEvent.create({ data: { actorId: manager.id, action: `updated SAGA tenant: plan ${school.plan} → ${plan}; status ${school.subscriptionStatus} → ${subscriptionStatus}${payment?.amount ? `; payment recorded PHP ${payment.amount}` : ""}`, entity: "school", entityId: schoolId } });
-  });
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "DUPLICATE_PAYMENT_REFERENCE") {
+      return NextResponse.json({ error: "A payment with this reference is already recorded for this school. Check its payment history before retrying." }, { status: 409 });
+    }
+    throw error;
+  }
   return NextResponse.json({ ok: true });
 }
