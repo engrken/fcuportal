@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { normalizeClassJoinCode, hashClassJoinCode } from "@/lib/class-invite-code";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
@@ -32,9 +32,9 @@ export async function POST(request: Request) {
   if (!throttle.allowed) return NextResponse.json({ error: "Too many code attempts. Try again later." }, { status: 429 });
   const parsed = joinSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Enter a valid 12-character invitation code." }, { status: 400 });
-  const code = parsed.data.code.toUpperCase().replace(/[\s-]/g, "");
-  if (!/^[A-HJ-NP-Z2-9]{12}$/.test(code)) return NextResponse.json({ error: "Enter a valid 12-character invitation code." }, { status: 400 });
-  const hash = createHash("sha256").update(code).digest("hex");
+  const code = normalizeClassJoinCode(parsed.data.code);
+  if (!code) return NextResponse.json({ error: "Enter a valid 12-character invitation code." }, { status: 400 });
+  const hash = hashClassJoinCode(code);
   const subject = await prisma.subject.findFirst({
     where: { schoolId: student.schoolId, joinCodeHash: hash, joinCodeExpiresAt: { gt: new Date() }, gradeStatus: "DRAFT" },
     select: { id: true, code: true, title: true }

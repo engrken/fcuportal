@@ -1,19 +1,10 @@
-import { randomBytes, createHash } from "node:crypto";
+import { generateClassJoinCode, hashClassJoinCode, formatClassJoinCode } from "@/lib/class-invite-code";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { checkAuthThrottle } from "@/lib/rate-limit";
 
 type Context = { params: Promise<{ subjectId: string }> };
-const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-function issueCode() {
-  const bytes = randomBytes(12);
-  return Array.from(bytes, byte => alphabet[byte % alphabet.length]).join("");
-}
-function hashJoinCode(code: string) {
-  return createHash("sha256").update(code).digest("hex");
-}
-
 async function owned(subjectId: string, teacherId: string, schoolId: string) {
   return prisma.subject.findFirst({ where: { id: subjectId, teacherId, schoolId },
     select: { id: true, gradeStatus: true, joinCodeHash: true, joinCodeExpiresAt: true } });
@@ -38,13 +29,13 @@ export async function POST(request: Request, context: Context) {
   if (subject.gradeStatus !== "DRAFT") return NextResponse.json({ error: "Recall the class to draft before enabling invitations." }, { status: 409 });
   const throttle = await checkAuthThrottle(request, "class-invite-rotation:" + teacher.id, 15, 60 * 60_000, "identity");
   if (!throttle.allowed) return NextResponse.json({ error: "Too many invitation resets. Try again later." }, { status: 429 });
-  const code = issueCode();
+  const code = generateClassJoinCode();
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60_000);
   await prisma.$transaction([
-    prisma.subject.update({ where: { id: subject.id }, data: { joinCodeHash: hashJoinCode(code), joinCodeExpiresAt: expiresAt } }),
+    prisma.subject.update({ where: { id: subject.id }, data: { joinCodeHash: hashClassJoinCode(code), joinCodeExpiresAt: expiresAt } }),
     prisma.auditEvent.create({ data: { actorId: teacher.id, action: "issued or rotated class enrollment code", entity: "subject", entityId: subject.id } })
   ]);
-  const formatted = code.match(/.{1,4}/g)?.join("-") || code;
+  const formatted = formatClassJoinCode(code);
   return NextResponse.json({ code: formatted, expiresAt }, { headers: { "Cache-Control": "no-store" } });
 }
 
