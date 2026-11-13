@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate status; fi && prisma generate && npm run test:grades && npm run test:classes && npm run test:simulation && npm run test:scorebook-layout && next build",
+    "build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate status; fi && prisma generate && npm run test:grades && npm run test:classes && npm run test:simulation && npm run test:scorebook-layout && npm run test:tenant && next build",
     "test:grades": "node --test tests/grades.test.cjs",
     "test:classes": "node --test tests/class-navigation.test.cjs",
     "postinstall": "prisma generate",
@@ -17,7 +17,8 @@
     "db:studio": "prisma studio",
     "db:migrate": "prisma migrate deploy",
     "test:simulation": "node --test tests/grade-simulation.test.cjs",
-    "test:scorebook-layout": "node --test tests/scorebook-layout.test.cjs tests/fcu-grade-format.test.cjs"
+    "test:scorebook-layout": "node --test tests/scorebook-layout.test.cjs tests/fcu-grade-format.test.cjs",
+    "test:tenant": "node --test tests/tenant-operations.test.cjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",
