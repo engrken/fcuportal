@@ -12,13 +12,19 @@ export async function GET() {
   ];
   const enrollments = await prisma.enrollment.findMany({
     where: { OR: enrollmentIdentity, subject: { schoolId: student.schoolId, isPublished: true } },
-    include: {
+    select: {
+      id: true, remarks: true, finalGradeOverride: true,
       scores: { select: { assessmentId: true, points: true, remark: true } },
       subject: {
-        include: {
+        select: {
+          code: true, title: true, term: true, academicYear: true,
+          gradeStatus: true, submittedAt: true, verifiedAt: true,
           teacher: { select: { fullName: true } },
-          gradeBands: true,
-          categories: { include: { assessments: true } }
+          gradeBands: { select: { minPercent: true, finalGrade: true, remarks: true } },
+          categories: { select: {
+            id: true, parentId: true, name: true, weight: true, conversionBase: true,
+            assessments: { select: { id: true, title: true, maxScore: true, weight: true, dueDate: true } }
+          } }
         }
       }
     },
@@ -29,6 +35,8 @@ export async function GET() {
     // Only use scores belonging to THIS enrollment, never scores from
     // another student who happens to have a matching student number.
     const scoresByItem = new Map(enrollment.scores.map(score => [score.assessmentId, score]));
+    const categoryById = new Map(subject.categories.map(category => [category.id, category]));
+    const parents = new Set(subject.categories.flatMap(category => category.parentId ? [category.parentId] : []));
     const percent = calculateFinal(subject.categories.map(category => ({
       id: category.id, parentId: category.parentId, weight: category.weight, conversionBase: category.conversionBase,
       assessments: category.assessments.map(assessment => ({
@@ -38,16 +46,17 @@ export async function GET() {
     })));
     const equivalent = equivalentFromBands(percent, enrollment.subject.gradeBands);
     const pathFor = (categoryId: string): string => {
-      const names: string[] = []; let current = subject.categories.find(category => category.id === categoryId);
-      while (current) { names.unshift(current.name); current = current.parentId ? subject.categories.find(category => category.id === current?.parentId) : undefined; }
+      const names: string[] = []; let current = categoryById.get(categoryId);
+      const seen = new Set<string>();
+      while (current && !seen.has(current.id)) { seen.add(current.id); names.unshift(current.name); current = current.parentId ? categoryById.get(current.parentId) : undefined; }
       return names.join(" / ");
     };
-    const leafCategories = subject.categories.filter(category => !subject.categories.some(child => child.parentId === category.id));
+    const leafCategories = subject.categories.filter(category => !parents.has(category.id));
     const categories = leafCategories.map(category => {
       let root = category;
-      while (root.parentId) { const parent = subject.categories.find(item => item.id === root.parentId); if (!parent) break; root = parent; }
+      while (root.parentId) { const parent = categoryById.get(root.parentId); if (!parent) break; root = parent; }
       const weight = category.id === root.id ? root.weight : root.weight * category.weight / 100;
-      const parent = category.parentId ? subject.categories.find(item => item.id === category.parentId) : null;
+      const parent = category.parentId ? categoryById.get(category.parentId) : null;
       return {
         id: category.id, name: pathFor(category.id), weight,
         conversionBase: parent?.conversionBase ?? category.conversionBase,
