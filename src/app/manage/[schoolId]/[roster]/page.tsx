@@ -14,5 +14,5 @@ export default async function TenantRosterPage({ params }: { params: Promise<{ s
   const school = schools.find(entry => entry.id === schoolId);
   if (!school) notFound();
 
-  return <TenantRoster key={`${school.id}/${roster}`} school={school} schools={schools} roster={roster} />;
+  return <TenantRoster key={`${school.id}/${roster}`} school={school} schools={schools} roster={roster} managerName={manager.fullName} managerEmail={manager.email} managerSchoolSlug={manager.school.slug} managerProfileImagePath={manager.profileImagePath} />;
 }
