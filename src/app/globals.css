@@ -1326,3 +1326,55 @@
 @media(max-width:850px){.tenant-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tenant-workspace-table{min-width:650px}.tenant-operations-header{flex-wrap:wrap}.tenant-admin-controls{justify-content:flex-start}.tenant-admin-controls>div{text-align:left}}
 @media(max-width:680px){.tenant-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tenant-settings-column{grid-template-columns:1fr}.tenant-filter-grid{grid-template-columns:1fr}.tenant-workspace-table,.tenant-workspace-table tbody,.tenant-workspace-table tr{display:block;min-width:0}.tenant-workspace-table thead{display:none}.tenant-workspace-table tr{margin:0 0 12px;padding:12px;border:1px solid var(--bs-border-color,#e3eaf3);border-radius:11px}.tenant-workspace-table td{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;width:100%;padding:6px 2px;border:0;text-align:right}.tenant-workspace-table td:before{content:attr(data-label);color:var(--bs-secondary-color,#718198);font-size:.68rem;font-weight:700;text-align:left;flex:none}.tenant-workspace-table td:first-child:before{display:none}.tenant-workspace-table td:first-child{padding-bottom:11px;border-bottom:1px solid var(--bs-border-color,#e4e9f3)}.tenant-school-button{text-align:left}.tenant-workspace-table td:last-child{align-items:center}.tenant-roster-links{justify-content:flex-end}.tenant-selected-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.tenant-school-list,.tenant-settings-panel{padding:15px!important}.tenant-operations-header h1{font-size:1.5rem}.tenant-export-actions{width:100%}.tenant-export-actions .btn{flex:1}.tenant-renewal-row{grid-template-columns:1fr}.tenant-save-actions .btn{width:100%}}
 @media(max-width:440px){.tenant-kpi-grid{gap:8px}.tenant-kpi{padding:12px!important}.tenant-kpi>strong{font-size:1.04rem}.tenant-panel-header{align-items:flex-start}.tenant-roster-links .btn{padding:6px}}
+
+/* One consistent account menu across teacher, student, tenant, and roster pages. */
+.topbar{position:relative;z-index:18}
+.account-menu-shell{position:relative;z-index:35;display:block;flex:none;text-align:left}
+.account-menu-trigger{display:flex;align-items:center;gap:9px;max-width:260px;min-width:42px;min-height:42px;padding:4px 9px 4px 5px;border:1px solid transparent;border-radius:999px;background:transparent;color:var(--bs-body-color,#20334f);cursor:pointer;text-align:left;transition:background .15s ease,border-color .15s ease}
+.account-menu-trigger:hover,.account-menu-trigger.is-open{background:var(--bs-tertiary-bg,#f2f5fa);border-color:var(--bs-border-color,#e3e9f1)}
+.account-menu-trigger:focus-visible{outline:2px solid var(--bs-primary,#2458d3);outline-offset:3px}
+.account-menu-avatar{display:grid;place-items:center;flex:none;width:36px;height:36px;overflow:hidden;border-radius:50%;background:#eaf0ff;color:#305dcc;font-weight:800;font-size:.76rem;border:1px solid #d5e0f6}
+.account-menu-avatar img{display:block;width:100%;height:100%;object-fit:cover}
+.account-menu-trigger-copy{display:grid;gap:1px;min-width:0}
+.account-menu-trigger-copy b{display:block;font-size:.71rem;font-weight:800;line-height:1.28;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.account-menu-trigger-copy small{color:var(--bs-secondary-color,#718198);font-size:.62rem}
+.account-menu-caret{font-size:1rem;color:var(--bs-secondary-color,#708199);line-height:1;flex:none}
+.account-menu-panel{position:absolute;right:0;top:calc(100% + 9px);width:min(318px,calc(100vw - 24px));max-height:min(570px,calc(100dvh - 90px));overflow-y:auto;border:1px solid var(--bs-border-color,#dde5f0);border-radius:15px;background:var(--bs-body-bg,#fff);color:var(--bs-body-color,#233650);box-shadow:0 18px 54px rgba(11,32,67,.19);text-align:left;padding:8px;animation:account-menu-appear .12s ease-out}
+@keyframes account-menu-appear{from{opacity:.7;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.account-menu-identity{display:grid;gap:3px;padding:13px 13px 11px;border-bottom:1px solid var(--bs-border-color,#e9edf4)}
+.account-menu-identity b{font-size:.86rem;overflow-wrap:anywhere}
+.account-menu-identity small{font-size:.71rem;color:var(--bs-secondary-color,#708198);overflow-wrap:anywhere}
+.account-menu-identity>span{font-size:.65rem;color:var(--bs-primary,#285cc0);font-weight:750}
+.account-menu-actions{display:grid;gap:1px;padding:7px 0}
+.account-menu-item{display:flex;align-items:center;gap:10px;width:100%;border:0;border-radius:9px;padding:10px 11px;background:transparent;color:inherit;text-align:left;cursor:pointer;font-size:.77rem;font-weight:750}
+.account-menu-item>span:last-child{display:grid;gap:3px;min-width:0}
+.account-menu-item b{font-size:.76rem}
+.account-menu-item small{color:var(--bs-secondary-color,#77869b);font-size:.66rem;font-weight:500;line-height:1.35}
+.account-menu-item-icon{display:grid;place-items:center;width:30px;height:30px;flex:none;border-radius:8px;background:var(--bs-tertiary-bg,#f0f4fb);color:var(--bs-primary,#2759b5);font-size:.95rem;font-weight:800}
+.account-menu-item:hover,.account-menu-item:focus-visible{background:var(--bs-tertiary-bg,#eef3fa)}
+.account-menu-item:focus-visible,.account-menu-theme-options button:focus-visible{outline:2px solid var(--bs-primary,#2458d3);outline-offset:1px}
+.account-menu-theme{border-top:1px solid var(--bs-border-color,#e9edf4);padding:11px 10px}
+.account-menu-section-label{display:block;color:var(--bs-secondary-color,#718097);font-size:.65rem;font-weight:800;letter-spacing:.04em;margin-bottom:9px}
+.account-menu-theme-options{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.account-menu-theme-options button{border:1px solid var(--bs-border-color,#dae4f0);border-radius:8px;min-height:36px;padding:7px;background:transparent;color:inherit;font-size:.71rem;font-weight:700;cursor:pointer}
+.account-menu-theme-options button.selected{border-color:var(--bs-primary,#2458d3);background:var(--bs-primary-bg-subtle,#eaf2ff);color:var(--bs-primary-text-emphasis,#234f98)}
+.account-menu-footer{border-top:1px solid var(--bs-border-color,#e9edf4);padding-top:5px}
+.account-menu-logout{color:var(--bs-danger,#a53a43);font-weight:800}
+.account-menu-logout .account-menu-item-icon{color:#aa3e46;background:#fff0f1}
+.account-menu-logout:disabled{opacity:.65;cursor:wait}
+.account-menu-error{margin:4px 9px;color:#aa3e46;font-size:.7rem}
+.tenant-admin-controls>.account-menu-shell{display:block;text-align:left}
+.tenant-roster-page{min-height:100vh;color:var(--bs-body-color,#20334f)}
+.tenant-roster-header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.tenant-roster-header>div:first-child{min-width:0}
+.tenant-roster-page[data-bs-theme="dark"]{background:#111b2b}
+.tenant-roster-page[data-bs-theme="dark"] .surface{background:#172235!important;border-color:#35455d!important;color:#e3ebf6}
+.portal-layout[data-bs-theme="dark"] .account-menu-avatar,.tenant-operations[data-bs-theme="dark"] .account-menu-avatar,.tenant-roster-page[data-bs-theme="dark"] .account-menu-avatar{background:#253c60;color:#c8d9ff;border-color:#3a5274}
+.portal-layout[data-bs-theme="dark"] .account-menu-panel,.tenant-operations[data-bs-theme="dark"] .account-menu-panel,.tenant-roster-page[data-bs-theme="dark"] .account-menu-panel{background:#18263b;color:#ecf1fa;border-color:#35455e}
+.portal-layout[data-bs-theme="dark"] .account-menu-trigger,.tenant-operations[data-bs-theme="dark"] .account-menu-trigger,.tenant-roster-page[data-bs-theme="dark"] .account-menu-trigger{color:#e8eef9}
+.portal-layout[data-bs-theme="dark"] .account-menu-trigger:hover,.portal-layout[data-bs-theme="dark"] .account-menu-trigger.is-open,.tenant-operations[data-bs-theme="dark"] .account-menu-trigger:hover,.tenant-operations[data-bs-theme="dark"] .account-menu-trigger.is-open,.tenant-roster-page[data-bs-theme="dark"] .account-menu-trigger:hover,.tenant-roster-page[data-bs-theme="dark"] .account-menu-trigger.is-open{background:#263b57;border-color:#3b5474}
+.portal-layout[data-bs-theme="dark"] .account-menu-theme-options button.selected,.tenant-operations[data-bs-theme="dark"] .account-menu-theme-options button.selected,.tenant-roster-page[data-bs-theme="dark"] .account-menu-theme-options button.selected{background:#293e62;color:#c2d9ff;border-color:#6094ee}
+.portal-layout[data-bs-theme="dark"] .account-menu-item:hover,.tenant-operations[data-bs-theme="dark"] .account-menu-item:hover,.tenant-roster-page[data-bs-theme="dark"] .account-menu-item:hover{background:#273a56}
+@media(max-width:760px){.topbar-right{margin-left:auto;flex-shrink:0}.topbar-right .portal-help-trigger{min-height:38px}.account-menu-trigger-copy{display:none}.account-menu-trigger{gap:4px;padding:3px 6px 3px 3px}.account-menu-avatar{width:34px;height:34px}.tenant-roster-header{align-items:flex-start}.tenant-operations-header .tenant-admin-controls{margin-left:auto}}
+@media(max-width:460px){.topbar-right .portal-help-trigger{font-size:0;padding:8px;min-width:36px;justify-content:center}.topbar-right .portal-help-trigger>span{font-size:.72rem}.account-menu-panel{width:min(310px,calc(100vw - 16px))}.tenant-roster-page{padding-left:12px!important;padding-right:12px!important}}
+@media(prefers-reduced-motion:reduce){.account-menu-panel{animation:none}.account-menu-trigger{transition:none}}
