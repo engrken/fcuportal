@@ -8,7 +8,7 @@ import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
 
 type Context = { params: Promise<{ subjectId: string }> };
 async function ownedSubject(subjectId: string, teacherId: string, schoolId: string) {
-  return prisma.subject.findFirst({ where: { id: subjectId, teacherId, schoolId }, include: { categories: { orderBy: { sortOrder: "asc" } }, gradeBands: { orderBy: { sortOrder: "asc" } }, assessments: { orderBy: { createdAt: "asc" } }, enrollments: { orderBy: { studentName: "asc" }, include: { scores: { select: { assessmentId: true, points: true, remark: true } }, gradeChangeHistory: { orderBy: { createdAt: "desc" }, include: { actor: { select: { fullName: true } } } } } } } });
+  return prisma.subject.findFirst({ where: { id: subjectId, teacherId, schoolId }, include: { categories: { orderBy: { sortOrder: "asc" } }, gradeBands: { orderBy: { sortOrder: "asc" } }, assessments: { orderBy: { createdAt: "asc" } }, enrollments: { orderBy: { studentName: "asc" }, include: { scores: { select: { assessmentId: true, points: true, remark: true } }, _count: { select: { gradeChangeHistory: true } } } } } });
 }
 async function ownedSubjectForMutation(subjectId: string, teacherId: string, schoolId: string) {
   return prisma.subject.findFirst({
@@ -50,7 +50,7 @@ export async function GET(_request: Request, context: Context) {
         scores: marks.has(item.id) ? [marks.get(item.id)!] : []
       }))
     })));
-    return { ...enrollment, finalPercent };
+    return { ...enrollment, gradeChangeCount: enrollment._count.gradeChangeHistory, finalPercent };
   });
   return NextResponse.json({ subject: { ...subject, enrollments: details } });
 }
