@@ -134,6 +134,8 @@ model Subject {
   courseYear   String?
   isPublished  Boolean         @default(false)
   gradeStatus  GradeStatus     @default(DRAFT)
+  joinCodeHash String?         @unique
+  joinCodeExpiresAt DateTime?
   submittedAt  DateTime?
   verifiedAt   DateTime?
   createdAt    DateTime        @default(now())
