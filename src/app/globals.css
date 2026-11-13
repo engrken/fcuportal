@@ -710,3 +710,38 @@
 .earned-course-footnote{color:var(--bs-secondary-color,#68788e);font-size:.68rem}
 .mobile-score-student>.earned-course-summary{margin:10px 0}
 @media(max-width:540px){.earned-course-summary{padding:9px}.earned-course-items{grid-template-columns:repeat(auto-fit,minmax(min(100%,130px),1fr))}.earned-course-title strong{font-size:.73rem}}
+
+
+/* Attendance danger status must sit UNDER the P/A/E summary, not beside it.
+ * Keep the sticky Summary column at its existing width with no overlap. */
+.attendance-table td.attendance-summary {
+  vertical-align: middle;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.attendance-table td.attendance-summary > b,
+.attendance-table td.attendance-summary > small {
+  display: block;
+  max-width: 100%;
+  white-space: normal;
+  line-height: 1.35;
+}
+.attendance-table td.attendance-summary > small {
+  margin-top: 3px;
+}
+.attendance-table td.attendance-summary > .absence-risk-badge {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  clear: both;
+  margin-top: 8px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+  padding: 5px 7px;
+  font-size: .61rem;
+}
+.portal-layout[data-bs-theme="dark"] .attendance-table td.attendance-summary > .absence-risk-badge {
+  background: #432b31;
+  color: #ffaaa4;
+}
