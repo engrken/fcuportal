@@ -47,13 +47,15 @@ export async function GET(request: Request) {
     },
     orderBy: [{ studentName: "asc" }, { subject: { academicYear: "desc" } }],
     take: 50,
-    include: {
-      scores: true,
+    select: {
+      id: true, studentName: true, studentNumber: true, remarks: true, finalGradeOverride: true,
+      scores: { select: { assessmentId: true, points: true, remark: true } },
       subject: {
-        include: {
-          categories: { orderBy: { sortOrder: "asc" } },
-          gradeBands: { orderBy: { sortOrder: "asc" } },
-          assessments: { orderBy: { createdAt: "asc" } }
+        select: {
+          id: true, classId: true, code: true, title: true, term: true, academicYear: true, gradeStatus: true,
+          categories: { orderBy: { sortOrder: "asc" }, select: { id: true, parentId: true, name: true, weight: true, conversionBase: true } },
+          gradeBands: { select: { minPercent: true, finalGrade: true, remarks: true } },
+          assessments: { orderBy: { createdAt: "asc" }, select: { id: true, categoryId: true, title: true, maxScore: true, weight: true, dueDate: true } }
         }
       }
     }
@@ -61,16 +63,24 @@ export async function GET(request: Request) {
 
   const matches = enrollments.map(enrollment => {
     const subject = enrollment.subject;
+    const scoreByAssessment = new Map(enrollment.scores.map(score => [score.assessmentId, score]));
+    const categoryNames = new Map(subject.categories.map(category => [category.id, categoryPath(category.id, subject.categories)]));
+    const itemsByCategory = new Map<string, typeof subject.assessments>();
+    for (const assessment of subject.assessments) {
+      const list = itemsByCategory.get(assessment.categoryId) ?? [];
+      list.push(assessment);
+      itemsByCategory.set(assessment.categoryId, list);
+    }
     const categories = subject.categories.map(category => ({
       id: category.id,
       parentId: category.parentId,
       weight: category.weight,
       conversionBase: category.conversionBase,
-      assessments: subject.assessments.filter(item => item.categoryId === category.id).map(item => ({
+      assessments: (itemsByCategory.get(category.id) ?? []).map(item => ({
         title: item.title,
         maxScore: item.maxScore,
         weight: item.weight,
-        scores: enrollment.scores.filter(score => score.assessmentId === item.id).map(score => ({ points: score.points, remark: score.remark }))
+        scores: scoreByAssessment.has(item.id) ? [{ points: scoreByAssessment.get(item.id)!.points, remark: scoreByAssessment.get(item.id)!.remark }] : []
       }))
     }));
     const percent = calculateFinal(categories);
@@ -93,11 +103,11 @@ export async function GET(request: Request) {
       finalGrade: enrollment.finalGradeOverride ?? equivalent.finalGrade,
       finalRemark: enrollment.remarks || equivalent.remarks,
       records: subject.assessments.map(item => {
-        const score = enrollment.scores.find(value => value.assessmentId === item.id);
+        const score = scoreByAssessment.get(item.id);
         return {
           id: item.id,
           title: item.title,
-          category: categoryPath(item.categoryId, subject.categories),
+          category: categoryNames.get(item.categoryId) || "",
           points: score?.points ?? null,
           remark: score?.remark ?? null,
           maxScore: item.maxScore,
