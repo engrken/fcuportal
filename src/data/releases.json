@@ -1,5 +1,17 @@
 [
   {
+    "version": "0.4.0-beta.1",
+    "date": "2026-11-13",
+    "kind": "feature",
+    "changes": [
+      "Teachers can now search and add registered, email-verified students from their own school directly to a class roster.",
+      "Teachers can generate, copy, rotate, or revoke seven-day class invitation codes for verified students.",
+      "Students can join an eligible class from their Student Portal using a teacher-provided invitation code and view their linked class list.",
+      "Enrollment now preserves existing attendance, assessment scores, and grade history when linking registered students to existing class records.",
+      "Added duplicate-enrollment, tenant-isolation, account-verification, and invitation-code protections."
+    ]
+  },
+  {
     "version": "0.3.0-beta.1",
     "date": "2026-11-13",
     "kind": "feature",
