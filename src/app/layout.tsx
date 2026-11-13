@@ -1,6 +1,7 @@
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./globals.css";
 import type { Metadata } from "next";
+import SiteFooter from "@/components/SiteFooter";
 
 export const metadata: Metadata = {
   title: "SAGA Portal | School Assessment, Grading & Analytics",
@@ -9,5 +10,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}</body></html>;
+  return <html lang="en"><body className="saga-app-body"><div className="saga-app-content">{children}</div><SiteFooter /></body></html>;
 }
