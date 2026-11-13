@@ -5,9 +5,9 @@ const test = require("node:test");
 const ts = require("typescript");
 const source = fs.readFileSync(path.join(__dirname, "../src/lib/class-navigation.ts"), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-const module = { exports: {} };
-new Function("exports", "module", compiled)(module.exports, module);
-const { courseCodeSlug, classRouteKey, classWorkspaceHref, parseClassWorkspaceQuery, resolveClassSelection, resolveClassRoute } = module.exports;
+const syntheticModule = { exports: {} };
+new Function("exports", "module", compiled)(syntheticModule.exports, syntheticModule);
+const { courseCodeSlug, classRouteKey, classWorkspaceHref, parseClassWorkspaceQuery, resolveClassSelection, resolveClassRoute } = syntheticModule.exports;
 const subjects = [{ id: "class-a", code: "ECE 18", academicYear: "2026-2027", term: "1st Semester" }, { id: "class-b", code: "ECE 6", academicYear: "2025-2026", term: "2nd Semester" }];
 
 test("overview and sidebar links open a human-readable course URL", () => {
