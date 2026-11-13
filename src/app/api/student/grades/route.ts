@@ -13,22 +13,12 @@ export async function GET() {
   const enrollments = await prisma.enrollment.findMany({
     where: { OR: enrollmentIdentity, subject: { schoolId: student.schoolId, isPublished: true } },
     include: {
+      scores: { select: { assessmentId: true, points: true, remark: true } },
       subject: {
         include: {
           teacher: { select: { fullName: true } },
           gradeBands: true,
-          categories: {
-            include: {
-              assessments: {
-                include: {
-                  scores: {
-                    where: { enrollment: { OR: enrollmentIdentity } },
-                    select: { points: true, remark: true }
-                  }
-                }
-              }
-            }
-          }
+          categories: { include: { assessments: true } }
         }
       }
     },
@@ -36,7 +26,16 @@ export async function GET() {
   });
   const grades = enrollments.map(enrollment => {
     const { subject } = enrollment;
-    const percent = calculateFinal(subject.categories.map(category => ({ id: category.id, parentId: category.parentId, weight: category.weight, conversionBase: category.conversionBase, assessments: category.assessments.map(assessment => ({ title: assessment.title, maxScore: assessment.maxScore, weight: assessment.weight, scores: assessment.scores })) })));
+    // Only use scores belonging to THIS enrollment, never scores from
+    // another student who happens to have a matching student number.
+    const scoresByItem = new Map(enrollment.scores.map(score => [score.assessmentId, score]));
+    const percent = calculateFinal(subject.categories.map(category => ({
+      id: category.id, parentId: category.parentId, weight: category.weight, conversionBase: category.conversionBase,
+      assessments: category.assessments.map(assessment => ({
+        title: assessment.title, maxScore: assessment.maxScore, weight: assessment.weight,
+        scores: scoresByItem.has(assessment.id) ? [scoresByItem.get(assessment.id)!] : []
+      }))
+    })));
     const equivalent = equivalentFromBands(percent, enrollment.subject.gradeBands);
     const pathFor = (categoryId: string): string => {
       const names: string[] = []; let current = subject.categories.find(category => category.id === categoryId);
@@ -48,9 +47,24 @@ export async function GET() {
       let root = category;
       while (root.parentId) { const parent = subject.categories.find(item => item.id === root.parentId); if (!parent) break; root = parent; }
       const weight = category.id === root.id ? root.weight : root.weight * category.weight / 100;
-      return { name: pathFor(category.id), weight, assessments: category.assessments.map(item => ({ id: item.id, title: item.title, points: item.scores[0]?.points ?? null, remark: item.scores[0]?.remark ?? null, maxScore: item.maxScore, weight: item.weight, dueDate: item.dueDate })) };
+      const parent = category.parentId ? subject.categories.find(item => item.id === category.parentId) : null;
+      return {
+        id: category.id, name: pathFor(category.id), weight,
+        conversionBase: parent?.conversionBase ?? category.conversionBase,
+        assessments: category.assessments.map(item => ({
+          id: item.id, title: item.title,
+          points: scoresByItem.get(item.id)?.points ?? null,
+          remark: scoresByItem.get(item.id)?.remark ?? null,
+          maxScore: item.maxScore, weight: item.weight, dueDate: item.dueDate
+        }))
+      };
     });
-    return { id: enrollment.id, code: subject.code, title: subject.title, term: subject.term, academicYear: subject.academicYear, teacher: subject.teacher.fullName, status: subject.gradeStatus, submittedAt: subject.submittedAt, verifiedAt: subject.verifiedAt, percent, finalGrade: enrollment.finalGradeOverride ?? equivalent.finalGrade, remarks: enrollment.remarks || equivalent.remarks, categories };
+    return { id: enrollment.id, code: subject.code, title: subject.title, term: subject.term, academicYear: subject.academicYear, teacher: subject.teacher.fullName, status: subject.gradeStatus, submittedAt: subject.submittedAt, verifiedAt: subject.verifiedAt, percent, finalGrade: enrollment.finalGradeOverride ?? equivalent.finalGrade, remarks: enrollment.remarks || equivalent.remarks,
+      categories,
+      gradeBands: subject.gradeBands.map(band => ({
+        minPercent: band.minPercent, finalGrade: band.finalGrade, remarks: band.remarks
+      }))
+    };
   });
   return NextResponse.json({ grades }, { headers: { "Cache-Control": "no-store" } });
 }

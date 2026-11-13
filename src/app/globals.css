@@ -745,3 +745,73 @@
   background: #432b31;
   color: #ffaaa4;
 }
+
+
+/* Student what-if simulator: scrollable and responsive, with no write actions. */
+.grade-simulator-launch { margin-top: 9px; width: 100%; font-size: .68rem; font-weight: 750; white-space: normal; line-height: 1.3; }
+.grade-simulator-backdrop { z-index: 70; }
+.grade-simulator-dialog { display: flex; flex-direction: column; width: min(960px, calc(100vw - 26px)); height: min(92dvh, 850px); max-height: calc(100dvh - 20px); padding: 0; overflow: hidden; border: 1px solid var(--bs-border-color, #dee4ef); background: var(--bs-body-bg, #fff); color: var(--bs-body-color, #172439); }
+.grade-simulator-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:20px; flex:none; padding:21px 26px 15px; border-bottom:1px solid var(--bs-border-color, #d9e0ea); }
+.grade-simulator-heading h2 { margin:5px 0; font-size:1.37rem; font-weight:800; }
+.grade-simulator-heading p { margin:3px 0 0; color:var(--bs-secondary-color, #6b7890); font-size:.8rem; }
+.grade-simulator-close { flex:none; display:grid; place-items:center; width:34px; height:34px; border-radius:9px; background:var(--bs-tertiary-bg, #f4f7fa); border:1px solid var(--bs-border-color, #d9e0ea); color:inherit; font-size:1.5rem; line-height:1; }
+.grade-simulator-close:hover { background:var(--bs-secondary-bg, #e8edf4); }
+.grade-simulator-body { min-height:0; overflow-y:auto; padding:18px 26px 20px; flex:1; overscroll-behavior:contain; }
+.grade-simulator-notice { font-size:.76rem; line-height:1.55; padding:11px 13px; border-radius:9px; background:var(--bs-tertiary-bg, #f5f7fb); border:1px solid var(--bs-border-color, #dfe5ef); color:var(--bs-body-color, #253c59); }
+.grade-simulator-metrics { margin:15px 0; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.grade-simulator-metrics>div { display:flex; flex-direction:column; gap:5px; min-width:0; border:1px solid var(--bs-border-color, #e2e7ef); border-radius:10px; padding:13px 14px; background:var(--bs-body-bg, #fff); }
+.grade-simulator-metrics small { color:var(--bs-secondary-color, #74839a); font-size:.69rem; font-weight:700; }
+.grade-simulator-metrics strong { font-size:1.45rem; font-weight:800; line-height:1.15; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.grade-simulator-metrics span { font-size:.67rem; color:var(--bs-secondary-color, #74839a); }
+.grade-simulator-metric-projected { border-color:var(--bs-primary-border-subtle, #b5c9ee)!important; background:var(--bs-primary-bg-subtle, #f0f5ff)!important; }
+.grade-simulator-metric-projected strong { color:var(--bs-primary-text-emphasis, #24498f); }
+.grade-simulator-controls { display:grid; grid-template-columns:minmax(140px, 200px) minmax(170px,1fr); gap:10px 16px; align-items:end; padding:12px 0 17px; border-bottom:1px solid var(--bs-border-color, #e0e5ed); }
+.grade-simulator-target label { display:block; margin-bottom:5px; font-size:.72rem; font-weight:750; }
+.grade-simulator-target-result { font-size:.74rem; line-height:1.5; color:var(--bs-secondary-color, #66778d); }
+.grade-simulator-presets { grid-column:1/-1; display:flex; gap:7px; flex-wrap:wrap; }
+.grade-simulator-presets .btn { font-size:.72rem; }
+.grade-simulator-section-intro { display:flex; justify-content:space-between; align-items:baseline; gap:9px; flex-wrap:wrap; margin:18px 0 10px; }
+.grade-simulator-section-intro strong { font-size:.86rem; }
+.grade-simulator-section-intro span { font-size:.71rem; color:var(--bs-secondary-color, #68788e); }
+.grade-simulator-categories { display:grid; gap:12px; }
+.grade-simulator-category { border:1px solid var(--bs-border-color, #dbe3ee); border-radius:10px; overflow:hidden; }
+.grade-simulator-category-heading { display:flex; justify-content:space-between; align-items:center; gap:15px; flex-wrap:wrap; padding:12px 14px; background:var(--bs-tertiary-bg, #f7f9fc); border-bottom:1px solid var(--bs-border-color, #dbe3ee); }
+.grade-simulator-category-heading h3 { margin:0 0 3px; font-size:.82rem; font-weight:800; }
+.grade-simulator-category-heading small { display:block; font-size:.67rem; color:var(--bs-secondary-color, #6b798d); }
+.grade-simulator-category-points { text-align:right; flex:none; }
+.grade-simulator-category-points span { font-size:.79rem; font-weight:800; color:var(--bs-primary-text-emphasis, #2a5091); font-variant-numeric:tabular-nums; }
+.grade-simulator-assessments { display:grid; }
+.grade-simulator-assessment { display:grid; grid-template-columns:minmax(150px,1fr) minmax(155px,210px) auto; align-items:center; gap:14px; padding:11px 14px; border-top:1px solid var(--bs-border-color, #ebeff5); }
+.grade-simulator-assessment:first-child { border-top:0; }
+.grade-simulator-assessment:nth-child(even) { background:var(--bs-tertiary-bg, #fafbfc); }
+.grade-simulator-assessment-info { min-width:0; }
+.grade-simulator-assessment-info strong { font-size:.78rem; display:block; overflow-wrap:anywhere; }
+.grade-simulator-assessment-info small { font-size:.69rem; color:var(--bs-secondary-color, #708096); display:block; margin-top:3px; }
+.grade-simulator-entry { min-width:0; display:block; font-size:.67rem; font-weight:750; }
+.grade-simulator-entry>span { display:block; margin-bottom:4px; color:var(--bs-secondary-color, #64768d); }
+.grade-simulator-entry .form-control, .grade-simulator-entry .form-select { width:100%; font-size:.78rem; }
+.grade-simulator-invalid { display:block; font-size:.62rem; margin-top:3px; color:var(--bs-danger-text-emphasis, #b44244); }
+.grade-simulator-reset-item { background:transparent; border:0; color:var(--bs-primary-text-emphasis, #2455ad); text-decoration:underline; padding:6px 0; font-size:.72rem; }
+.grade-simulator-empty { padding:13px; margin:0; font-size:.74rem; color:var(--bs-secondary-color, #708096); }
+.grade-simulator-disclaimer { margin:17px 0 0!important; font-size:.72rem!important; color:var(--bs-secondary-color, #65758b); line-height:1.65!important; }
+.grade-simulator-footer { padding:12px 26px; flex:none; display:flex; justify-content:space-between; align-items:center; gap:14px; border-top:1px solid var(--bs-border-color, #dbe3ee); background:var(--bs-tertiary-bg, #f7f9fc); }
+.grade-simulator-footer span { font-size:.7rem; color:var(--bs-secondary-color, #718198); }
+@media(max-width:690px) {
+  .grade-simulator-dialog { width:100%; height:calc(100dvh - 14px); max-height:calc(100dvh - 14px); }
+  .grade-simulator-heading { padding:15px 15px 12px; }
+  .grade-simulator-heading h2 { font-size:1.13rem; }
+  .grade-simulator-body { padding:13px 14px; }
+  .grade-simulator-metrics { gap:6px; }
+  .grade-simulator-metrics>div { padding:9px; }
+  .grade-simulator-metrics small { font-size:.61rem; }
+  .grade-simulator-metrics strong { font-size:1.08rem; }
+  .grade-simulator-metrics span { font-size:.6rem; }
+  .grade-simulator-controls { grid-template-columns:1fr; gap:9px; }
+  .grade-simulator-presets { grid-column:1; }
+  .grade-simulator-category-heading { gap:8px; padding:11px; }
+  .grade-simulator-category-points { text-align:left; }
+  .grade-simulator-assessment { grid-template-columns:minmax(0,1fr) minmax(105px,140px); gap:8px; padding:10px; }
+  .grade-simulator-reset-item { grid-column:2; justify-self:end; padding:0; }
+  .grade-simulator-footer { padding:10px 14px; }
+}
+@media print { .grade-simulator-backdrop,.grade-simulator-launch { display:none!important; } }
