@@ -25,7 +25,7 @@ type Assessment = { id: string; categoryId: string; title: string; maxScore: num
 type Enrollment = { id: string; studentName: string; studentNumber: string | null; studentUserId: string | null; remarks: string | null; finalGradeOverride?: string | null; gradeChangeCount?: number; gradeChangeHistory?: Array<{ id:string; previousFinalGrade:string|null; previousRemarks:string|null; newFinalGrade:string|null; newRemarks:string|null; reason:string; createdAt:string; actor:{fullName:string} }>; scores: Array<{ assessmentId: string; points: number | null; remark: string | null }>; finalPercent: number | null };
 type GradeBand = { id: string; minPercent: number; finalGrade: string; remarks: string };
 type Detail = Subject & { categories: Category[]; gradeBands: GradeBand[]; assessments: Assessment[]; enrollments: Enrollment[] };
-type Grade = { id: string; code: string; title: string; term: string; academicYear: string; teacher: string; status: "DRAFT" | "SUBMITTED" | "VERIFIED"; submittedAt: string | null; verifiedAt: string | null; percent: number | null; finalGrade: string | null; remarks: string; gradeBands: Array<{ minPercent: number; finalGrade: string; remarks: string }>; categories: Array<{ id: string; name: string; weight: number; conversionBase: number; assessments: Array<{id:string;title:string;points:number|null;remark:string|null;maxScore:number;weight:number|null}> }> };
+type Grade = { id: string; itemCount?: number; recordedCount?: number; code: string; title: string; term: string; academicYear: string; teacher: string; status: "DRAFT" | "SUBMITTED" | "VERIFIED"; submittedAt: string | null; verifiedAt: string | null; percent: number | null; finalGrade: string | null; remarks: string; gradeBands: Array<{ minPercent: number; finalGrade: string; remarks: string }>; categories: Array<{ id: string; name: string; weight: number; conversionBase: number; assessments: Array<{id:string;title:string;points:number|null;remark:string|null;maxScore:number;weight:number|null}> }> };
 type StudentSearchMatch = { enrollmentId: string; studentName: string; studentNumber: string | null; studentRemark: string | null; class: { id: string; classId: string | null; code: string; title: string; term: string; academicYear: string; status: "DRAFT" | "SUBMITTED" | "VERIFIED" }; finalPercent: number | null; finalGrade: string | null; finalRemark: string; records: Array<{id:string;title:string;category:string;points:number|null;remark:string|null;maxScore:number;dueDate:string|null}> };
 type ScheduleRow = { label: string; day: string; startTime: string; endTime: string };
 type OverviewItem = { id: string; title: string; date: string | null; subjectId: string; code: string; subjectTitle: string; attendanceType?: "FACE_TO_FACE" | "ONLINE" | null; scheduleOverrideReason?: string | null; markedCount?: number; studentCount?: number };
@@ -458,6 +458,12 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false); const [classNavOpen, setClassNavOpen] = useState(false); const [onboardingOpen, setOnboardingOpen] = useState(false); const [helpOpen, setHelpOpen] = useState(false); const [helpInitialTab, setHelpInitialTab] = useState<"quick" | "faq" | "student" | "faculty">("quick"); const [subjectPage, setSubjectPage] = useState(1); const [classPage, setClassPage] = useState(1); const [rosterPage, setRosterPage] = useState(1);
   const [studentLookupQuery, setStudentLookupQuery] = useState(""); const [studentLookupMatches, setStudentLookupMatches] = useState<StudentSearchMatch[]>([]); const [studentLookupBusy, setStudentLookupBusy] = useState(false); const [classStudentFilter, setClassStudentFilter] = useState(initialClassStudent);
   const [studentGradeQuery, setStudentGradeQuery] = useState(""); const [studentYearFilter, setStudentYearFilter] = useState("All School Years"); const [studentTermFilter, setStudentTermFilter] = useState("All Terms");
+  const [studentGradeDetails, setStudentGradeDetails] = useState<Record<string, Grade>>({});
+  const studentGradeRequests = useRef<Map<string, Promise<Grade | null>>>(new Map());
+  const [studentGradeLoading, setStudentGradeLoading] = useState<Record<string, boolean>>({});
+  const [studentGradeErrors, setStudentGradeErrors] = useState<Record<string, string>>({});
+  const [studentRefreshing, setStudentRefreshing] = useState(false);
+  const [studentLastUpdated, setStudentLastUpdated] = useState<Date | null>(null);
   const [profileName, setProfileName] = useState(user.fullName); const [passwordCurrent, setPasswordCurrent] = useState(""); const [passwordNew, setPasswordNew] = useState(""); const [passwordConfirm, setPasswordConfirm] = useState(""); const [passwordOtp, setPasswordOtp] = useState(""); const [passwordOtpSent, setPasswordOtpSent] = useState(false);
   const [profileImagePath, setProfileImagePath] = useState(user.profileImagePath); const [schoolLogoPath, setSchoolLogoPath] = useState(user.school.logoPath);
   const [overviewData, setOverviewData] = useState<OverviewData | null>(null); const [overviewLoading, setOverviewLoading] = useState(false); const [overviewRefresh, setOverviewRefresh] = useState(0);
@@ -609,7 +615,55 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
       setDetail(d.subject);
     } finally { setLoadingDetail(false); }
   }
-  async function loadGrades() { const d = await api("/api/student/grades"); setGrades(d.grades); }
+  async function loadGrades() {
+    const data = await api("/api/student/grades?view=summary");
+    setGrades(data.grades as Grade[]);
+    setStudentLastUpdated(new Date());
+    setStudentGradeDetails({});
+    setStudentGradeErrors({});
+    studentGradeRequests.current.clear();
+  }
+  async function refreshStudentGrades() {
+    if (teacher || studentRefreshing) return;
+    setStudentRefreshing(true);
+    try {
+      await loadGrades();
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : "Could not refresh your grades.");
+    } finally {
+      setStudentRefreshing(false);
+    }
+  }
+  async function ensureStudentGradeDetail(id: string): Promise<Grade | null> {
+    if (studentGradeDetails[id]) return studentGradeDetails[id];
+    const pending = studentGradeRequests.current.get(id);
+    if (pending) return pending;
+    setStudentGradeErrors(current => ({ ...current, [id]: "" }));
+    setStudentGradeLoading(current => ({ ...current, [id]: true }));
+    const task = (async (): Promise<Grade | null> => {
+      try {
+        const data = await api(`/api/student/grades?enrollmentId=${encodeURIComponent(id)}`);
+        const grade = data.grade as Grade;
+        setStudentGradeDetails(current => ({ ...current, [id]: grade }));
+        return grade;
+      } catch (error) {
+        setStudentGradeErrors(current => ({
+          ...current, [id]: error instanceof Error ? error.message : "Could not load assessment details."
+        }));
+        return null;
+      } finally {
+        studentGradeRequests.current.delete(id);
+        setStudentGradeLoading(current => ({ ...current, [id]: false }));
+      }
+    })();
+    studentGradeRequests.current.set(id, task);
+    return task;
+  }
+  function startStudentSimulation(id: string) {
+    setSimulatingGradeId(id);
+    void ensureStudentGradeDetail(id);
+    navigatePage("simulator");
+  }
   useEffect(() => {
     if (!teacher || !gradeChangeEnrollmentId || !detail?.id) return;
     const controller = new AbortController();
@@ -1144,6 +1198,13 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     }
     return result;
   }, [detail?.categories, detail?.assessments, detail?.enrollments, classSection, scoresByEnrollment]);
+  const studentGradeStats = useMemo(() => ({
+    visible: grades.length,
+    verified: grades.filter(grade => grade.status === "VERIFIED").length,
+    inProgress: grades.filter(grade => grade.status !== "VERIFIED").length,
+    pendingAssessments: grades.reduce((count, grade) =>
+      count + Math.max(0, (grade.itemCount ?? 0) - (grade.recordedCount ?? 0)), 0)
+  }), [grades]);
   const studentGradeYears = useMemo(() => [...new Set(grades.map(grade => grade.academicYear))].sort((a,b)=>b.localeCompare(a)), [grades]);
   const studentGradeTerms = useMemo(() => [...new Set(grades.map(grade => grade.term))].sort(), [grades]);
   const visibleGrades = useMemo(() => grades.filter(grade =>
