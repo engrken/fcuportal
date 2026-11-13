@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate status; fi && prisma generate && npm run test:grades && npm run test:classes && npm run test:simulation && npm run test:scorebook-layout && npm run test:tenant && npm run test:teacher-signup && npm run test:identity && next build",
+    "build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate status; fi && prisma generate && npm run test:grades && npm run test:classes && npm run test:simulation && npm run test:scorebook-layout && npm run test:tenant && npm run test:teacher-signup && npm run test:identity && npm run test:release && next build",
     "test:grades": "node --test tests/grades.test.cjs",
     "test:classes": "node --test tests/class-navigation.test.cjs",
     "postinstall": "prisma generate",
@@ -23,7 +23,8 @@
     "test:identity": "node --test tests/account-identity.test.cjs",
     "version:fix": "node scripts/bump-release.mjs fix",
     "version:feature": "node scripts/bump-release.mjs feature",
-    "version:major": "node scripts/bump-release.mjs major"
+    "version:major": "node scripts/bump-release.mjs major",
+    "test:release": "node --test tests/footer-version.test.cjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",
