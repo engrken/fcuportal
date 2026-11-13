@@ -196,70 +196,54 @@ function downloadXlsx(filename: string, sheetName: string, headers: string[], ro
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail: Detail, categories: Category[], logoPath?: string | null) {
+  // The FCU template contains one complete header image, not independent text cells.
+  // Use the same artwork in Print and Excel; no external IMAGE() formula required.
   let logoPng: Uint8Array | null = null;
-  if (logoPath) {
-    try {
-      const response = await fetch(`/api/media?pathname=${encodeURIComponent(logoPath)}`);
-      if (response.ok) {
-        const bitmap = await createImageBitmap(await response.blob());
-        const canvas = document.createElement("canvas"); canvas.width = bitmap.width; canvas.height = bitmap.height;
-        canvas.getContext("2d")?.drawImage(bitmap, 0, 0); bitmap.close();
-        const imageBlob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/png"));
-        if (imageBlob) logoPng = new Uint8Array(await imageBlob.arrayBuffer());
-      }
-    } catch { /* The workbook remains usable if the seal image cannot be loaded. */ }
+  try {
+    const headerResponse = await fetch("/fcu-grading-header.png");
+    if (!headerResponse.ok) throw new Error("Official FCU header graphic not found");
+    logoPng = new Uint8Array(await headerResponse.arrayBuffer());
+  } catch (error) {
+    alert("Unable to include the official FCU header. Please reload and retry.");
+    console.error("FCU grade-sheet header unavailable:", error);
+    return;
   }
-  // Preserve the FCU-EOMS-RO-006-F layout while allowing any number of grade components.
-  // A = student number, B = name, C.. = component values, final columns = TG/FG/Remarks.
-  const gradeSlots = Math.max(6, categories.length);
-  const columnCount = gradeSlots + 5;
+  // The supplied ISO template uses A:K, with student names merged across A:D.
+  // E:H are grading components, I is Total Grade, J is Final Grade, K is Remarks.
+  const gradeSlots = Math.max(4, categories.length);
+  const columnCount = gradeSlots + 7;
   const last = excelColumn(columnCount - 1);
-  const totalCol = gradeSlots + 2;
-  const ranges = categories.map((category, index) => ({
-    category,
-    start: 2 + Math.floor(index * gradeSlots / categories.length),
-    end: 1 + Math.floor((index + 1) * gradeSlots / categories.length)
-  }));
+  const totalCol = columnCount - 3;
   const cells: Array<Array<{ value: unknown; style: number }>> = [];
   const row = (values: Array<{ col: number; value: unknown; style?: number }>) => {
-    const result: Array<{ value: unknown; style: number }> = Array.from({ length: columnCount }, () => ({ value: "", style: 0 }));
+    const result = Array.from({ length: columnCount }, () => ({ value: "", style: 0 } as {value: unknown; style: number}));
     for (const item of values) result[item.col] = { value: item.value, style: item.style ?? 1 };
     cells.push(result);
   };
-  const fill = (start: number, end: number, value: unknown, style: number) =>
-    Array.from({ length: end - start + 1 }, (_, offset) => ({ col: start + offset, value: offset === 0 ? value : "", style }));
-  const rightStart = columnCount - 3;
-  // The top five rows match the university's official grading-sheets header.
-  row([{ col: 0, value: logoPng ? "" : "FCU", style: 3 }, ...fill(1, columnCount - 1, "FILAMER CHRISTIAN UNIVERSITY, INC.", 3)]);
-  row([{ col: 0, value: "", style: 2 }, ...fill(1, columnCount - 1, "Roxas Avenue, Roxas City, Capiz, Philippines", 2)]);
-  row([...fill(1, 2, "Form Name:", 1), ...fill(3, rightStart - 1, "GRADING SHEETS", 3), ...fill(rightStart, columnCount - 1, "Effectivity: October 1, 2025", 2)]);
-  row([...fill(1, 2, "Form No: FCU-EOMS-RO-006-F", 1), ...fill(3, rightStart - 1, "EDUCATIONAL ORGANIZATION MANAGEMENT SYSTEM  ISO 21001:2025", 2), ...fill(rightStart, columnCount - 1, "Issuing Office: REGISTRAR'S OFFICE", 2)]);
-  row([...fill(1, 2, "Revision No. 1", 1), ...fill(rightStart, columnCount - 2, "Page No.", 1), { col: columnCount - 1, value: 1, style: 1 }]);
-  row(fill(0, columnCount - 1, "Member: Association of Christian Schools, Colleges and Universities-Accrediting Council, Inc. (ACSCU-ACI)", 3));
-  row(fill(0, columnCount - 1, "Member: Association of Christian Schools, Colleges in Asia (ACUCA)", 3));
+  for (let i = 0; i < 9; i++) row([]); // A1:K9: official university header image
   row([]);
-  row([{ col: 0, value: "Course No.", style: 1 }, { col: 1, value: detail.code, style: 2 }, ...fill(2, 3, "Descriptive Title", 1), ...fill(4, columnCount - 1, detail.title, 2)]);
-  row([{ col: 0, value: "Class I.D.", style: 1 }, { col: 1, value: detail.classId || "—", style: 2 }, { col: 2, value: "Semester", style: 1 }, ...fill(3, 4, detail.term, 2), { col: 5, value: "Academic Year", style: 1 }, ...fill(6, columnCount - 1, detail.academicYear, 2)]);
-  row([]);
+  row([{ col: 0, value: "Course No.    " + detail.code + "        Descriptive Title    " + detail.title, style: 2 }]);
+  row([{ col: 0, value: "________________________________________________________________________________", style: 0 }]);
+  row([{ col: 0, value: "Class I.D.    " + (detail.classId || "—") + "        Semester    " + detail.term + "        Academic Year    " + detail.academicYear, style: 2 }]);
+  row([{ col: 0, value: "---------------------------------------------------------------------------------------------------------------", style: 6 }]);
   row([
-    { col: 0, value: "NO.", style: 4 },
-    { col: 1, value: "NAME OF STUDENTS", style: 4 },
-    ...ranges.map(range => ({ col: range.start, value: range.category.name.toUpperCase() + " " + effectiveCategoryWeight(range.category, detail.categories).toFixed(0) + "%", style: 4 })),
-    { col: totalCol, value: "TG", style: 4 },
-    { col: totalCol + 1, value: "FG", style: 4 },
-    { col: totalCol + 2, value: "REMARKS", style: 4 }
+    { col: 0, value: "NAME OF STUDENTS", style: 4 },
+    ...categories.map((category, index) => ({ col: index + 4, value: ": " + category.name.toUpperCase() + " :", style: 4 })),
+    { col: totalCol, value: ": TG :", style: 4 },
+    { col: totalCol + 1, value: ": FG :", style: 4 },
+    { col: totalCol + 2, value: ": REMARKS :", style: 4 }
   ]);
-  for (const enrollment of detail.enrollments) {
+  row([{ col: 0, value: "---------------------------------------------------------------------------------------------------------------", style: 6 }]);
+  for (const [index, enrollment] of detail.enrollments.entries()) {
     const band = detail.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent).find(item => enrollment.finalPercent !== null && enrollment.finalPercent >= item.minPercent);
     const suppress = ["INC", "DROPPED"].includes(enrollment.remarks || "");
-    const componentCells = ranges.map(range => {
-      const percentage = weightedCategoryPercent(enrollment, range.category, detail.categories, detail.assessments);
-      return { col: range.start, value: suppress || percentage === null ? "" : Number((percentage * effectiveCategoryWeight(range.category, detail.categories) / 100).toFixed(2)), style: 5 };
+    const componentValues = categories.map((category, componentIndex) => {
+      const percent = weightedCategoryPercent(enrollment, category, detail.categories, detail.assessments);
+      return { col: componentIndex + 4, value: suppress || percent === null ? "" : Number((percent * effectiveCategoryWeight(category, detail.categories) / 100).toFixed(2)), style: 5 };
     });
     row([
-      { col: 0, value: enrollment.studentNumber || "", style: 5 },
-      { col: 1, value: enrollment.studentName.toLocaleUpperCase(), style: 5 },
-      ...componentCells,
+      { col: 0, value: (index + 1) + ". " + enrollment.studentName.toLocaleUpperCase(), style: 5 },
+      ...componentValues,
       { col: totalCol, value: suppress || enrollment.finalPercent === null ? "" : Number(enrollment.finalPercent.toFixed(2)), style: 5 },
       { col: totalCol + 1, value: suppress ? "" : enrollment.finalGradeOverride || band?.finalGrade || "", style: 5 },
       { col: totalCol + 2, value: enrollment.remarks || band?.remarks || "", style: 5 }
@@ -273,50 +257,44 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
       const text = xmlEscape(cell.value);
       return `<c r="${reference}" s="${cell.style}" t="inlineStr"><is><t xml:space="preserve">${text}</t></is></c>`;
     }).join("");
-    const height = rowIndex === 0 ? ' ht="26" customHeight="1"' : rowIndex === 11 ? ' ht="42" customHeight="1"' : "";
+    const height = rowIndex < 9 ? ' ht="15.5" customHeight="1"' : rowIndex === 13 || rowIndex === 15 ? ' ht="11" customHeight="1"' : ' ht="15" customHeight="1"';
     return `<row r="${rowNumber}"${height}>${xmlCells}</row>`;
   }).join("");
-  const middleEnd = excelColumn(rightStart - 1);
-  const rightFirst = excelColumn(rightStart);
   const merges = [
-    "A1:A5", "B1:" + last + "1", "B2:" + last + "2",
-    "B3:C3", "D3:" + middleEnd + "3", rightFirst + "3:" + last + "3",
-    "B4:C4", "D4:" + middleEnd + "5", rightFirst + "4:" + last + "4",
-    "B5:C5", rightFirst + "5:" + excelColumn(columnCount - 2) + "5",
-    "A6:" + last + "6", "A7:" + last + "7",
-    "C9:D9", "E9:" + last + "9", "D10:E10", "G10:" + last + "10",
-    ...ranges.flatMap(range => range.start === range.end ? [] : [
-      excelColumn(range.start) + "12:" + excelColumn(range.end) + "12",
-      ...detail.enrollments.map((_, index) =>
-        excelColumn(range.start) + (index + 13) + ":" + excelColumn(range.end) + (index + 13))
-    ])
+    "A1:" + last + "9", "A11:" + last + "11", "A12:" + last + "12", "A13:" + last + "13",
+    "A14:" + last + "14", "A15:D15", "A16:" + last + "16",
+    ...detail.enrollments.map((_, index) => "A" + (index + 17) + ":D" + (index + 17))
   ];
   const mergeXml = merges.map(range => '<mergeCell ref="' + range + '"/>').join("");
-  const widths = '<cols><col min="1" max="1" width="22" customWidth="1"/><col min="2" max="2" width="42" customWidth="1"/>' +
-    '<col min="3" max="' + totalCol + '" width="10.5" customWidth="1"/>' +
-    '<col min="' + (totalCol + 1) + '" max="' + (totalCol + 2) + '" width="12" customWidth="1"/>' +
-    '<col min="' + (totalCol + 3) + '" max="' + columnCount + '" width="20" customWidth="1"/></cols>';
+  const widths = '<cols><col min="1" max="1" width="8.44" customWidth="1"/>' +
+    '<col min="2" max="2" width="8" customWidth="1"/><col min="3" max="3" width="8.22" customWidth="1"/>' +
+    '<col min="4" max="4" width="9.55" customWidth="1"/>' +
+    '<col min="5" max="' + totalCol + '" width="9" customWidth="1"/>' +
+    '<col min="' + (totalCol + 1) + '" max="' + (totalCol + 2) + '" width="8.3" customWidth="1"/>' +
+    '<col min="' + (totalCol + 3) + '" max="' + columnCount + '" width="13" customWidth="1"/></cols>';
   const worksheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"' +
-    (logoPng ? ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"' : "") +
-    '><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView workbookViewId="0"><pane ySplit="12" topLeftCell="A13" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>' +
-    '<sheetFormatPr defaultRowHeight="18"/>' + widths + '<sheetData>' + xmlRows + '</sheetData>' +
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+    '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView workbookViewId="0"><pane ySplit="16" topLeftCell="A17" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>' +
+    '<sheetFormatPr defaultRowHeight="15"/>' + widths + '<sheetData>' + xmlRows + '</sheetData>' +
     '<mergeCells count="' + merges.length + '">' + mergeXml + '</mergeCells>' +
-    '<printOptions horizontalCentered="1"/><pageMargins left="0.25" right="0.25" top="0.25" bottom="0.25" header="0.2" footer="0.2"/>' +
-    '<pageSetup paperSize="5" orientation="portrait" fitToWidth="1" fitToHeight="0"/>' +
-    (logoPng ? '<drawing r:id="rId1"/>' : "") + '</worksheet>';
+    '<printOptions horizontalCentered="1"/><pageMargins left="0.275" right="0.20" top="0.39" bottom="0.24" header="0.20" footer="0.20"/>' +
+    '<pageSetup paperSize="14" orientation="portrait" fitToWidth="1" fitToHeight="0"/>' +
+    '<drawing r:id="rId1"/></worksheet>';
   const styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
     '<fonts count="3"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font><font><b/><sz val="15"/><name val="Arial"/></font></fonts>' +
-    '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9E6F5"/><bgColor indexed="64"/></patternFill></fill></fills>' +
-    '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color auto="1"/></left><right style="thin"><color auto="1"/></right><top style="thin"><color auto="1"/></top><bottom style="thin"><color auto="1"/></bottom><diagonal/></border></borders>' +
+    '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>' +
+    '<borders count="3"><border><left/><right/><top/><bottom/><diagonal/></border>' +
+    '<border><left style="dotted"/><right style="dotted"/><top/><bottom style="dotted"/><diagonal/></border>' +
+    '<border><left/><right/><top style="dashed"/><bottom style="dashed"/><diagonal/></border></borders>' +
     '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-    '<cellXfs count="6"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
-    '<xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1"/>' +
-    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/>' +
-    '<xf numFmtId="0" fontId="2" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
-    '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
-    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>' +
+    '<cellXfs count="7"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
+    '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
+    '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
+    '<xf numFmtId="0" fontId="1" fillId="2" borderId="2" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="2" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="2" xfId="0" applyBorder="1"/>' +
     '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
   const safeSheetName = sheetName.replace(/[\\/?*\[\]:]/g, " ").slice(0, 31) || "FCU Grades";
   const files = [
@@ -328,7 +306,7 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
     { name: "xl/styles.xml", content: styles },
     ...(logoPng ? [
       { name: "xl/worksheets/_rels/sheet1.xml.rels", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>' },
-      { name: "xl/drawings/drawing1.xml", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>780000</xdr:colOff><xdr:row>1</xdr:row><xdr:rowOff>60000</xdr:rowOff></xdr:from><xdr:ext cx="731520" cy="731520"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="1" name="FCU Seal"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="731520" cy="731520"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor></xdr:wsDr>' },
+      { name: "xl/drawings/drawing1.xml", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="7040000" cy="1755000"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="1" name="Official FCU ISO grading header"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor></xdr:wsDr>' },
       { name: "xl/drawings/_rels/drawing1.xml.rels", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/></Relationships>' },
       { name: "xl/media/image1.png", content: logoPng }
     ] : [])
@@ -1193,28 +1171,21 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
       </section>}
       </div></main>
           {printMode && detail && user.school.slug === "fcu" && <article className="print-grade-sheet fcu-print-sheet">
-        <table className="print-form-header fcu-form-header"><tbody>
-          <tr><td rowSpan={5} className="print-seal">{schoolLogoPath ? <img src={"/api/media?pathname=" + encodeURIComponent(schoolLogoPath)} alt="FCU seal"/> : "FCU"}</td><td colSpan={10} className="print-university"><b>FILAMER CHRISTIAN UNIVERSITY, INC.</b></td></tr>
-          <tr><td colSpan={10} className="print-university">Roxas Avenue, Roxas City, Capiz, Philippines</td></tr>
-          <tr><td colSpan={2}>Form Name:</td><td colSpan={5} className="text-center"><b>GRADING SHEETS</b></td><td colSpan={3}>Effectivity: October 1, 2025</td></tr>
-          <tr><td colSpan={2}><b>Form No: FCU-EOMS-RO-006-F</b></td><td colSpan={5} rowSpan={2} className="text-center fcu-certification"><b>EDUCATIONAL ORGANIZATION<br/>MANAGEMENT SYSTEM<br/>ISO 21001:2025</b></td><td colSpan={3}>Issuing Office:<br/>REGISTRAR&apos;S OFFICE</td></tr>
-          <tr><td colSpan={2}>Revision No. 1</td><td colSpan={3}>Page No. 1</td></tr>
-        </tbody></table>
-        <div className="print-membership"><b>Member: Association of Christian Schools, Colleges and Universities-Accrediting Council, Inc. (ACSCU-ACI)<br/>Member: Association of Christian Schools, Colleges in Asia (ACUCA)</b></div>
+        <img className="fcu-print-official-header" src="/fcu-grading-header.png" alt="FCU-EOMS-RO-006-F Graduate School / Collegiate Grading Sheet" />
         <table className="fcu-print-course-table"><tbody>
           <tr><th>Course No.</th><td>{detail.code}</td><th colSpan={2}>Descriptive Title</th><td colSpan={2}>{detail.title}</td></tr>
           <tr><th>Class I.D.</th><td>{detail.classId || "—"}</td><th>Semester</th><td>{detail.term}</td><th>Academic Year</th><td>{detail.academicYear}</td></tr>
         </tbody></table>
         <table className="print-grade-table fcu-print-grade-table"><thead><tr>
-          <th className="fcu-print-id">NO.</th><th className="fcu-print-name">NAME OF STUDENTS</th>
-          {printCategories.map(category=><th key={category.id}>{category.name.toUpperCase()}<small>{effectiveCategoryWeight(category,detail.categories).toFixed(0)}%</small></th>)}
-          <th>TG</th><th>FG</th><th>REMARKS</th>
-        </tr></thead><tbody>{detail.enrollments.map(en=>{
+          <th className="fcu-print-name">NAME OF STUDENTS</th>
+          {printCategories.map(category=><th key={category.id}>: {category.name.toUpperCase()} :</th>)}
+          <th>: TG :</th><th>: FG :</th><th>: REMARKS :</th>
+        </tr></thead><tbody>{detail.enrollments.map((en,index)=>{
           const band=detail.gradeBands.slice().sort((a,b)=>b.minPercent-a.minPercent).find(item=>en.finalPercent!==null&&en.finalPercent>=item.minPercent);
           const remark=en.remarks||band?.remarks||"";
           const suppress=["INC","DROPPED"].includes(en.remarks||"");
           return <tr key={en.id}>
-            <td>{en.studentNumber||""}</td><td>{en.studentName.toLocaleUpperCase()}</td>
+            <td>{index+1}. {en.studentName.toLocaleUpperCase()}</td>
             {printCategories.map(category=>{
               const percentage=weightedCategoryPercent(en,category,detail.categories,detail.assessments);
               return <td key={category.id}>{printMode==="grades"&&!suppress&&percentage!==null?(percentage*effectiveCategoryWeight(category,detail.categories)/100).toFixed(2):""}</td>;
