@@ -14,6 +14,7 @@ import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
 import { buildWorkbookPages, workbookWidths } from "@/lib/scorebook-layout";
 
 type User = { id: string; role: string; fullName: string; email: string; isTenantManager?: boolean; emailDeliveryEnabled?: boolean; profileImagePath: string | null; studentNumber: string | null; courseProgram?: string | null; yearLevel?: string | null; school: { id: string; slug: string; name: string; shortName: string; portalTitle: string; logoText: string; logoPath: string | null; primaryColor: string } };
+type AttendanceMark = { subjectId: string; enrollmentId: string; assessmentId: string; remark: "PRESENT" | "ABSENT" | "EXCUSED" | null };
 type Subject = { id: string; classId: string | null; code: string; title: string; term: string; academicYear: string; schedule: string | null; courseYear: string | null; isPublished: boolean; gradeStatus: "DRAFT" | "SUBMITTED" | "VERIFIED"; submittedAt: string | null; verifiedAt: string | null; _count?: { enrollments: number } };
 type Category = { id: string; parentId: string | null; name: string; weight: number; conversionBase: number; sortOrder: number };
 type Assessment = { id: string; categoryId: string; title: string; maxScore: number; weight: number | null; dueDate: string | null; scheduleOverrideReason?: string | null; attendanceType?: "FACE_TO_FACE" | "ONLINE" | null };
@@ -459,6 +460,19 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   const [bulkScoresOpen, setBulkScoresOpen] = useState(false); const [bulkFileName, setBulkFileName] = useState(""); const [bulkOperations, setBulkOperations] = useState<Array<{enrollmentId:string;assessmentId:string;points:number|null;remark:"EXCUSED"|"ABSENT"|"DID_NOT_SUBMIT"|null}>>([]); const [bulkRowsPreview, setBulkRowsPreview] = useState<Array<{row:number;student:string;studentNumber:string;cells:number;errors:string[]}>>([]); const [bulkErrors, setBulkErrors] = useState<string[]>([]);
   const [gradeChangeEnrollmentId, setGradeChangeEnrollmentId] = useState(""); const [gradeChangeGrade, setGradeChangeGrade] = useState("AUTO"); const [gradeChangeRemark, setGradeChangeRemark] = useState("AUTO"); const [gradeChangeReason, setGradeChangeReason] = useState("");
   const [attendanceQuickOpenId, setAttendanceQuickOpenId] = useState(initialAttendanceToday && initialClassId ? initialClassId : "");
+  const attendancePendingRef = useRef<Map<string, AttendanceMark>>(new Map());
+  const attendanceSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const attendanceSavingRef = useRef(false);
+  const attendanceFailedRef = useRef(false);
+  const [attendanceSaveState, setAttendanceSaveState] = useState<"idle" | "pending" | "saving" | "saved" | "error">("idle");
+  useEffect(() => {
+    const onPageHide = () => {
+      if (attendanceSaveTimerRef.current) clearTimeout(attendanceSaveTimerRef.current);
+      void flushAttendanceMarks();
+    };
+    window.addEventListener("pagehide", onPageHide);
+    return () => { window.removeEventListener("pagehide", onPageHide); onPageHide(); };
+  }, []);
   const [showWeightBreakdown, setShowWeightBreakdown] = useState(false);
   const [scorebookView, setScorebookView] = useState<"auto" | "all">("auto");
   const [scorebookPage, setScorebookPage] = useState(0);
@@ -699,7 +713,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     const weekday = weekdayFromDate(attendanceDate); const scheduledDays = scheduleWeekdays(detail.schedule);
     if (weekday === null) { setErr("Choose a valid class date."); return; }
     if (!scheduledDays.includes(weekday) && attendanceReason.trim().length < 4) { setErr("This date is outside the class schedule. Enter a reason such as “Make-up class”."); return; }
-    await run(async () => { const result = await api(`/api/teacher/subjects/${detail.id}`, { method: "POST", body: JSON.stringify({ title: `Attendance · ${attendanceDate}`, categoryId: leafCategories(detail.categories).find(item => item.name.toLocaleLowerCase().includes("attendance"))?.id, maxScore: 1, dueDate: attendanceDate, scheduleOverrideReason: attendanceReason.trim() || undefined, attendanceType }) }); setDetail(current => current ? { ...current, assessments: [...current.assessments, result.assessment], enrollments: current.enrollments.map(enrollment => ({ ...enrollment, scores: [...enrollment.scores, { assessmentId: result.assessment.id, points: null, remark: "PRESENT" }] })) } : current); setAttendanceOpen(false); }, "Attendance day added. Record each student as present, absent, or excused.");
+    await run(async () => { const result = await api(`/api/teacher/subjects/${detail.id}/attendance`, { method: "POST", body: JSON.stringify({ date: attendanceDate, categoryId: leafCategories(detail.categories).find(item => item.name.toLocaleLowerCase().includes("attendance"))?.id, reason: attendanceReason.trim() || undefined, attendanceType }) }); setDetail(current => current ? { ...current, assessments: [...current.assessments, result.assessment], enrollments: current.enrollments.map(enrollment => ({ ...enrollment, scores: [...enrollment.scores, { assessmentId: result.assessment.id, points: null, remark: "PRESENT" }] })) } : current); setAttendanceOpen(false); }, "Attendance day added. Record each student as present, absent, or excused.");
   }
   async function saveWeights() {
     if (!detail) return; await run(async () => { await api(`/api/teacher/subjects/${detail.id}`, { method: "PATCH", body: JSON.stringify({ categories: detail.categories }) }); }, "Grading weights saved.");
@@ -758,23 +772,72 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     if (!detail || detail.gradeStatus === "DRAFT" || !window.confirm("Recall this grade record? Students will no longer see these grades, and the class record will return to draft for editing.")) return;
     await run(async () => { await api(`/api/teacher/subjects/${detail.id}`, { method: "PATCH", body: JSON.stringify({ recallGrades: true }) }); await loadDetail(); await loadSubjects(); }, "Submission recalled. The class record is back in draft and hidden from students.");
   }
-  async function saveScore(enrollmentId: string, assessmentId: string, value: string, remark: string | null = null) {
-    const points = remark ? null : value.trim() === "" ? null : Number(value);
-    const scoreRemark = remark || null;
-    setErr(""); setNotice("");
+  function updateScoreLocally(enrollmentId: string, assessmentId: string, points: number | null, remark: string | null) {
     setDetail(current => {
       if (!current) return current;
       const enrollments = current.enrollments.map(enrollment => {
         if (enrollment.id !== enrollmentId) return enrollment;
         const scores = enrollment.scores.some(score => score.assessmentId === assessmentId)
-          ? enrollment.scores.map(score => score.assessmentId === assessmentId ? { ...score, points, remark: scoreRemark } : score)
-          : [...enrollment.scores, { assessmentId, points, remark: scoreRemark }];
+          ? enrollment.scores.map(score => score.assessmentId === assessmentId ? { ...score, points, remark: remark } : score)
+          : [...enrollment.scores, { assessmentId, points, remark: remark }];
         const updated = { ...enrollment, scores };
         updated.finalPercent = calculateFinal(current.categories.map(category => ({ id: category.id, parentId: category.parentId, weight: category.weight, conversionBase: category.conversionBase, assessments: current.assessments.filter(item => item.categoryId === category.id).map(item => ({ title: item.title, maxScore: item.maxScore, weight: item.weight, scores: scores.filter(score => score.assessmentId === item.id) })) })));
         return updated;
       });
       return { ...current, enrollments };
     });
+  }
+
+  // Coalesce rapid attendance changes in small atomic requests.
+  async function flushAttendanceMarks() {
+    if (attendanceSavingRef.current || !attendancePendingRef.current.size || attendanceFailedRef.current) return;
+    if (attendanceSaveTimerRef.current) clearTimeout(attendanceSaveTimerRef.current);
+    attendanceSaveTimerRef.current = null;
+    const entries = [...attendancePendingRef.current.entries()];
+    const subjectId = entries[0][1].subjectId;
+    const batch = entries.filter(([, mark]) => mark.subjectId === subjectId).slice(0, 50);
+    for (const [key] of batch) attendancePendingRef.current.delete(key);
+    attendanceSavingRef.current = true;
+    setAttendanceSaveState("saving");
+    try {
+      await api(`/api/teacher/subjects/${subjectId}/attendance`, {
+        method: "PUT", keepalive: true,
+        body: JSON.stringify({ changes: batch.map(([, mark]) => ({
+          enrollmentId: mark.enrollmentId, assessmentId: mark.assessmentId, remark: mark.remark
+        })) })
+      });
+      setAttendanceSaveState(attendancePendingRef.current.size ? "pending" : "saved");
+    } catch (error) {
+      for (const [key, mark] of batch) {
+        if (!attendancePendingRef.current.has(key)) attendancePendingRef.current.set(key, mark);
+      }
+      attendanceFailedRef.current = true;
+      setAttendanceSaveState("error");
+      setErr(error instanceof Error ? `Attendance not saved: ${error.message}` : "Attendance not saved. Retry the pending marks.");
+    } finally {
+      attendanceSavingRef.current = false;
+      if (attendancePendingRef.current.size && !attendanceFailedRef.current) {
+        attendanceSaveTimerRef.current = setTimeout(() => { void flushAttendanceMarks(); }, 80);
+      }
+    }
+  }
+
+  function saveAttendanceMark(enrollmentId: string, assessmentId: string, remark: AttendanceMark["remark"]) {
+    if (!detail || detail.gradeStatus === "VERIFIED") return;
+    updateScoreLocally(enrollmentId, assessmentId, null, remark);
+    const subjectId = detail.id;
+    attendancePendingRef.current.set(`${subjectId}:${enrollmentId}:${assessmentId}`, { subjectId, enrollmentId, assessmentId, remark });
+    attendanceFailedRef.current = false;
+    setAttendanceSaveState("pending");
+    if (attendanceSaveTimerRef.current) clearTimeout(attendanceSaveTimerRef.current);
+    attendanceSaveTimerRef.current = setTimeout(() => { void flushAttendanceMarks(); }, 300);
+  }
+
+  async function saveScore(enrollmentId: string, assessmentId: string, value: string, remark: string | null = null) {
+    const points = remark ? null : value.trim() === "" ? null : Number(value);
+    const scoreRemark = remark || null;
+    setErr(""); setNotice("");
+    updateScoreLocally(enrollmentId, assessmentId, points, scoreRemark);
     try {
       await api("/api/teacher/scores", { method: "PUT", body: JSON.stringify({ enrollmentId, assessmentId, points, remark: scoreRemark }) });
       setNotice("Workbook change saved.");
@@ -1131,8 +1194,12 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           </section>}
           {classSection === "attendance" && <section id="class-section-attendance" className="surface gradebook-card attendance-workspace">
             <div className="section-heading"><div><span className="eyebrow">CLASS MEETINGS</span><h2>Attendance</h2><p className="muted">Attendance is counted by scheduled class day. Present, absent, and excused totals update per student; excused days are excluded from the absence rate.</p></div><button className="btn btn-primary" onClick={()=>void addAttendanceSession()} disabled={busy||detail.gradeStatus==="VERIFIED"}>＋ Add attendance day</button></div>
+            {attendanceSaveState !== "idle" && <div className={`small mb-2 ${attendanceSaveState === "error" ? "text-danger" : "text-secondary"}`} role="status" aria-live="polite">
+              {attendanceSaveState === "pending" ? "Attendance changes queued…" : attendanceSaveState === "saving" ? "Saving attendance…" : attendanceSaveState === "saved" ? "✓ Attendance saved" : "Attendance changes could not be saved."}
+              {attendanceSaveState === "error" && <button type="button" className="btn btn-link btn-sm" onClick={() => { attendanceFailedRef.current = false; void flushAttendanceMarks(); }}>Retry saving</button>}
+            </div>}
             <div className="privacy-note text-start mb-3">Scheduled days: {scheduleWeekdays(detail.schedule).map(day=>["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][day]).join(", ") || "No class days set"}. An off-schedule meeting requires a make-up class reason.</div>
-            {(()=>{const alerted=filteredEnrollments.map(enrollment=>({enrollment,summary:attendanceSummary(enrollment,detail.assessments)})).filter(item=>item.summary.alertLevel!=="none");const critical=alerted.filter(item=>item.summary.alertLevel==="critical").length;const early=alerted.length-critical;return <section className="attendance-alert-panel" aria-label="Attendance monitoring overview"><div className="attendance-alert-header"><div><span className="attendance-alert-eyebrow">ATTENDANCE OVERVIEW</span><b>Monitoring alerts</b><small>Early warning starts at 10% absent. High risk is above 20%; excused days are excluded.</small></div><div className="attendance-alert-summary"><span className="attendance-alert-total"><b>{alerted.length}</b><small>{alerted.length===1?"student flagged":"students flagged"}</small></span><span className="attendance-alert-count early"><i></i>{early} early</span><span className="attendance-alert-count critical"><i></i>{critical} high risk</span></div></div>{alerted.length?<div className="attendance-alert-list">{alerted.map(({enrollment,summary})=><article key={enrollment.id} className={`attendance-alert-item ${summary.alertLevel}`}><div className="attendance-alert-person"><b>{enrollment.studentName}</b><span className={`attendance-alert-badge ${summary.alertLevel}`}>{summary.alertLevel==="critical"?"High risk":"Early warning"}</span></div><div className="attendance-alert-detail"><span>{summary.absent} absent of {summary.present+summary.absent} counted days</span><b>{summary.absencePercent?.toFixed(1)}%</b></div><div className="attendance-alert-meter" role="presentation"><span style={{width:`${Math.min(100,summary.absencePercent??0)}%`}} /></div></article>)}</div>:<div className="attendance-alert-clear"><span aria-hidden="true">✓</span><div><b>No attendance alerts</b><small>No students in the current roster filter have reached the 10% absence threshold.</small></div></div>}</section>})()}{detail.assessments.filter(item=>item.title.toLocaleLowerCase().startsWith("attendance ·")).sort((a,b)=>(b.dueDate||"").localeCompare(a.dueDate||"")).length ? <div className="table-scroll"><table className="table grade-table ecr-table attendance-table"><thead><tr><th>STUDENT</th><th>SUMMARY</th>{detail.assessments.filter(item=>item.title.toLocaleLowerCase().startsWith("attendance ·")).sort((a,b)=>(b.dueDate||"").localeCompare(a.dueDate||"")).map(item=><th key={item.id}>{item.dueDate ? new Date(item.dueDate).toLocaleDateString() : item.title}<small>{item.attendanceType === "ONLINE" ? "Online" : item.attendanceType === "FACE_TO_FACE" ? "Face-to-Face" : "Type not set"} · {item.scheduleOverrideReason ? `Make-up class: ${item.scheduleOverrideReason}` : "Scheduled class day"}</small></th>)}</tr></thead><tbody>{filteredEnrollments.map(enrollment=>{const summary=attendanceSummary(enrollment,detail.assessments);return <tr key={enrollment.id}><td><b>{enrollment.studentName}</b><small className="d-block text-secondary">{enrollment.studentNumber||"No student ID"}</small></td><td className="attendance-summary"><b>{summary.present}/{summary.present+summary.absent} present · {summary.percent===null?"—":summary.percent.toFixed(1)+"%"}</b><small>P {summary.present} · A {summary.absent} · E {summary.excused}</small>{summary.atRisk&&<span className="absence-risk-badge">DANGER OF FAILING · {summary.absencePercent?.toFixed(1)}% ABSENT</span>}</td>{detail.assessments.filter(item=>item.title.toLocaleLowerCase().startsWith("attendance ·")).sort((a,b)=>(b.dueDate||"").localeCompare(a.dueDate||"")).map(item=>{const score=enrollment.scores.find(value=>value.assessmentId===item.id);const value=score?.remark==="EXCUSED"?"EXCUSED":score?.remark==="ABSENT"?"ABSENT":score?.remark==="PRESENT"||score?.points!=null?"PRESENT":"";return <td key={item.id}><select className="form-select form-select-sm attendance-mark" aria-label={`${enrollment.studentName} ${item.title}`} value={value} onChange={event=>saveScore(enrollment.id,item.id,"",event.target.value||null)} disabled={busy||detail.gradeStatus==="VERIFIED"}><option value="">Not marked</option><option value="PRESENT">Present</option><option value="ABSENT">Absent</option><option value="EXCUSED">Excused</option></select></td>})}</tr>})}</tbody></table></div> : <div className="inline-empty">No attendance sessions yet. Add a day that matches this class schedule to start recording attendance.</div>}
+            {(()=>{const alerted=filteredEnrollments.map(enrollment=>({enrollment,summary:attendanceSummary(enrollment,detail.assessments)})).filter(item=>item.summary.alertLevel!=="none");const critical=alerted.filter(item=>item.summary.alertLevel==="critical").length;const early=alerted.length-critical;return <section className="attendance-alert-panel" aria-label="Attendance monitoring overview"><div className="attendance-alert-header"><div><span className="attendance-alert-eyebrow">ATTENDANCE OVERVIEW</span><b>Monitoring alerts</b><small>Early warning starts at 10% absent. High risk is above 20%; excused days are excluded.</small></div><div className="attendance-alert-summary"><span className="attendance-alert-total"><b>{alerted.length}</b><small>{alerted.length===1?"student flagged":"students flagged"}</small></span><span className="attendance-alert-count early"><i></i>{early} early</span><span className="attendance-alert-count critical"><i></i>{critical} high risk</span></div></div>{alerted.length?<div className="attendance-alert-list">{alerted.map(({enrollment,summary})=><article key={enrollment.id} className={`attendance-alert-item ${summary.alertLevel}`}><div className="attendance-alert-person"><b>{enrollment.studentName}</b><span className={`attendance-alert-badge ${summary.alertLevel}`}>{summary.alertLevel==="critical"?"High risk":"Early warning"}</span></div><div className="attendance-alert-detail"><span>{summary.absent} absent of {summary.present+summary.absent} counted days</span><b>{summary.absencePercent?.toFixed(1)}%</b></div><div className="attendance-alert-meter" role="presentation"><span style={{width:`${Math.min(100,summary.absencePercent??0)}%`}} /></div></article>)}</div>:<div className="attendance-alert-clear"><span aria-hidden="true">✓</span><div><b>No attendance alerts</b><small>No students in the current roster filter have reached the 10% absence threshold.</small></div></div>}</section>})()}{detail.assessments.filter(item=>item.title.toLocaleLowerCase().startsWith("attendance ·")).sort((a,b)=>(b.dueDate||"").localeCompare(a.dueDate||"")).length ? <div className="table-scroll"><table className="table grade-table ecr-table attendance-table"><thead><tr><th>STUDENT</th><th>SUMMARY</th>{detail.assessments.filter(item=>item.title.toLocaleLowerCase().startsWith("attendance ·")).sort((a,b)=>(b.dueDate||"").localeCompare(a.dueDate||"")).map(item=><th key={item.id}>{item.dueDate ? new Date(item.dueDate).toLocaleDateString() : item.title}<small>{item.attendanceType === "ONLINE" ? "Online" : item.attendanceType === "FACE_TO_FACE" ? "Face-to-Face" : "Type not set"} · {item.scheduleOverrideReason ? `Make-up class: ${item.scheduleOverrideReason}` : "Scheduled class day"}</small></th>)}</tr></thead><tbody>{filteredEnrollments.map(enrollment=>{const summary=attendanceSummary(enrollment,detail.assessments);return <tr key={enrollment.id}><td><b>{enrollment.studentName}</b><small className="d-block text-secondary">{enrollment.studentNumber||"No student ID"}</small></td><td className="attendance-summary"><b>{summary.present}/{summary.present+summary.absent} present · {summary.percent===null?"—":summary.percent.toFixed(1)+"%"}</b><small>P {summary.present} · A {summary.absent} · E {summary.excused}</small>{summary.atRisk&&<span className="absence-risk-badge">DANGER OF FAILING · {summary.absencePercent?.toFixed(1)}% ABSENT</span>}</td>{detail.assessments.filter(item=>item.title.toLocaleLowerCase().startsWith("attendance ·")).sort((a,b)=>(b.dueDate||"").localeCompare(a.dueDate||"")).map(item=>{const score=enrollment.scores.find(value=>value.assessmentId===item.id);const value=score?.remark==="EXCUSED"?"EXCUSED":score?.remark==="ABSENT"?"ABSENT":score?.remark==="PRESENT"||score?.points!=null?"PRESENT":"";return <td key={item.id}><select className="form-select form-select-sm attendance-mark" aria-label={`${enrollment.studentName} ${item.title}`} value={value} onChange={event=>saveAttendanceMark(enrollment.id,item.id,(event.target.value||null) as AttendanceMark["remark"])} disabled={detail.gradeStatus==="VERIFIED"}><option value="">Not marked</option><option value="PRESENT">Present</option><option value="ABSENT">Absent</option><option value="EXCUSED">Excused</option></select></td>})}</tr>})}</tbody></table></div> : <div className="inline-empty">No attendance sessions yet. Add a day that matches this class schedule to start recording attendance.</div>}
             <div className="scorebook-legend"><span><b>Danger indicator</b> appears when absences exceed 20% of non-excused class days.</span><span>To change a class schedule, edit the subject details before recording sessions.</span></div>
           </section>}
           {classSection === "record" && <section id="class-section-record" className="surface gradebook-card scorebook-section" ref={scorebookRegionRef}><div className="section-heading"><div><span className="eyebrow">ELECTRONIC CLASS RECORD</span><h2>Record scores</h2><p className="muted">Enter scores by student and assessment. Each category includes an Equivalent (%) column showing the earned share of its parent Lecture or Laboratory allocation (for example, 93% × 25% = 23.25%). The final course grade also applies the top-level Lecture/Laboratory weights. Changes save when you leave a field. Pending work is not treated as zero.</p></div><div className="scorebook-toolbar"><span className="gradebook-count">{filteredEnrollments.length} of {detail.enrollments.length} students · {detail.assessments.length} items</span><label className="scorebook-contribution-toggle"><input type="checkbox" className="form-check-input" checked={showWeightBreakdown} onChange={event=>setShowWeightBreakdown(event.target.checked)} />Detailed breakdown row</label><button className="btn btn-outline-primary btn-sm" onClick={()=>downloadScoreCsv(true)} disabled={!scorebookAssessments.length}>Download template</button><button className="btn btn-outline-primary btn-sm" onClick={()=>{setBulkScoresOpen(true);setBulkErrors([]);setBulkRowsPreview([]);setBulkOperations([])}} disabled={!scorebookAssessments.length||detail.gradeStatus==="VERIFIED"}>Import scores</button><button className="btn btn-outline-secondary btn-sm" onClick={()=>downloadScoreCsv(false)} disabled={!scorebookAssessments.length}>Export scores</button></div></div>
