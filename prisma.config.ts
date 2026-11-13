@@ -9,7 +9,7 @@ function explicitSslVerification(connectionString: string) {
   return url.toString();
 }
 
-const directUrl = process.env.DIRECT_URL ?? process.env.MAIN_POSTGRES_URL_NON_POOLING ?? env("DIRECT_URL");
+// Only Prisma CLI uses this elevated, unpooled migration connection.\n// Runtime queries continue using the restricted DATABASE_URL credential.\nconst directUrl = process.env.MIGRATION_DATABASE_URL ?? process.env.DIRECT_URL ?? process.env.MAIN_POSTGRES_URL_NON_POOLING ?? env("DIRECT_URL");
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
