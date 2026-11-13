@@ -1,13 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireTenantManager } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-
-// Protect spreadsheet users from formula injection in payment references or notes.
-function csvCell(value: string | number | Date | null | undefined): string {
-  const text = value instanceof Date ? value.toISOString().slice(0, 10) : String(value ?? "");
-  const safe = /^[\s]*[=+\-@\t\r]/.test(text) ? "'" + text : text;
-  return '"' + safe.replaceAll('"', '""') + '"';
-}
+import { csvCell } from "@/lib/tenant-operations";
 
 export async function GET(request: Request) {
   const manager = await requireTenantManager();
