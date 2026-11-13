@@ -103,6 +103,7 @@ export default function TenantManagement({ managerName, managerEmail }: { manage
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityError, setActivityError] = useState("");
   const [activityRevision, setActivityRevision] = useState(0);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
 
   async function load(quiet = false) {
     if (quiet) setRefreshing(true); else setLoading(true);
@@ -122,6 +123,15 @@ export default function TenantManagement({ managerName, managerEmail }: { manage
     }
   }
   useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    const saved = window.localStorage.getItem("saga-portal-theme");
+    if (saved === "light" || saved === "dark") setTheme(saved);
+  }, []);
+  function toggleTheme() {
+    const next = theme === "light" ? "dark" : "light";
+    window.localStorage.setItem("saga-portal-theme", next);
+    setTheme(next);
+  }
 
   const active = tenants.find(tenant => tenant.id === selected) ?? null;
   useEffect(() => {
@@ -245,7 +255,7 @@ export default function TenantManagement({ managerName, managerEmail }: { manage
   const expiryDays = active ? daysUntil(active.subscriptionExpiresAt) : null;
   const isPlanUnchanged = !!active && !unsaved;
 
-  return <main className="tenant-operations container-fluid py-4 px-3 px-lg-5">
+  return <main className="tenant-operations container-fluid py-4 px-3 px-lg-5" data-bs-theme={theme}>
     <header className="tenant-operations-header">
       <div><Link href="/dashboard" className="small text-decoration-none">← Back to SAGA</Link>
         <p className="text-primary fw-bold small text-uppercase mt-3 mb-1">SAGA PLATFORM ADMINISTRATION</p>
@@ -254,6 +264,7 @@ export default function TenantManagement({ managerName, managerEmail }: { manage
       </div>
       <div className="tenant-admin-controls">
         <div><b>{managerName}</b><small>{managerEmail}</small></div>
+        <button type="button" className="btn btn-outline-secondary btn-sm" onClick={toggleTheme} aria-label={theme === "light" ? "Switch to dark theme" : "Switch to light theme"}>{theme === "light" ? "◐ Dark" : "☼ Light"}</button>
         <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => void load(true)} disabled={refreshing || loading || busy}>
           {refreshing ? "Refreshing…" : "Refresh data"}
         </button>
@@ -274,7 +285,7 @@ export default function TenantManagement({ managerName, managerEmail }: { manage
         { title: "Active schools", value: String(kpis.active), hint: "Currently enabled" },
         { title: "Needs attention", value: String(kpis.attention), hint: "Expiry, setup, or activation", attention: kpis.attention > 0 },
         { title: "Teacher / student accounts", value: `${kpis.teachers} / ${kpis.students}`, hint: "Portal registrations" },
-        { title: "Recorded receipts", value: money(kpis.receipts), hint: "All-time manual payment entries" }
+        { title: "Recorded payments", value: money(kpis.receipts), hint: "All-time manual payment entries" }
       ].map(card => <div className={`surface tenant-kpi${card.attention ? " tenant-kpi-alert" : ""}`} key={card.title}>
         <small>{card.title}</small><strong>{card.value}</strong><span>{card.hint}</span>
       </div>)}
