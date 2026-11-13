@@ -8,13 +8,50 @@ import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
 
 type Context = { params: Promise<{ subjectId: string }> };
 async function ownedSubject(subjectId: string, teacherId: string, schoolId: string) {
-  return prisma.subject.findFirst({ where: { id: subjectId, teacherId, schoolId }, include: { categories: { orderBy: { sortOrder: "asc" } }, gradeBands: { orderBy: { sortOrder: "asc" } }, assessments: { orderBy: { createdAt: "asc" } }, enrollments: { orderBy: { studentName: "asc" }, include: { scores: true, gradeChangeHistory: { orderBy: { createdAt: "desc" }, include: { actor: { select: { fullName: true } } } } } } } });
+  return prisma.subject.findFirst({ where: { id: subjectId, teacherId, schoolId }, include: { categories: { orderBy: { sortOrder: "asc" } }, gradeBands: { orderBy: { sortOrder: "asc" } }, assessments: { orderBy: { createdAt: "asc" } }, enrollments: { orderBy: { studentName: "asc" }, include: { scores: { select: { assessmentId: true, points: true, remark: true } }, gradeChangeHistory: { orderBy: { createdAt: "desc" }, include: { actor: { select: { fullName: true } } } } } } } });
+}
+async function ownedSubjectForMutation(subjectId: string, teacherId: string, schoolId: string) {
+  return prisma.subject.findFirst({
+    where: { id: subjectId, teacherId, schoolId },
+    include: {
+      categories: { orderBy: { sortOrder: "asc" } },
+      gradeBands: { orderBy: { sortOrder: "asc" } },
+      assessments: { orderBy: { createdAt: "asc" } },
+      enrollments: { select: {
+        id: true, studentName: true, studentNumber: true, remarks: true, finalGradeOverride: true,
+        scores: { select: { assessmentId: true, points: true, remark: true } }
+      } }
+    }
+  });
 }
 export async function GET(_request: Request, context: Context) {
   const teacher = await requireRole("TEACHER"); if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { subjectId } = await context.params; const subject = await ownedSubject(subjectId, teacher.id, teacher.schoolId);
   if (!subject) return NextResponse.json({ error: "Subject not found" }, { status: 404 });
-  const details = subject.enrollments.map(enrollment => ({ ...enrollment, finalPercent: calculateFinal(subject.categories.map(category => ({ id: category.id, parentId: category.parentId, weight: category.weight, conversionBase: category.conversionBase, assessments: subject.assessments.filter(a => a.categoryId === category.id).map(a => ({ title: a.title, maxScore: a.maxScore, weight: a.weight, scores: enrollment.scores.filter(s => s.assessmentId === a.id) })) }))) }));
+  // Build the category tree once, then do O(1) score lookup by assessment.
+  // Avoid scanning every score array for every category and assessment.
+  const itemsByCategory = new Map<string, typeof subject.assessments>();
+  for (const item of subject.assessments) {
+    const items = itemsByCategory.get(item.categoryId) ?? [];
+    items.push(item);
+    itemsByCategory.set(item.categoryId, items);
+  }
+  const categoryTree = subject.categories.map(category => ({
+    id: category.id, parentId: category.parentId, weight: category.weight,
+    conversionBase: category.conversionBase,
+    assessments: itemsByCategory.get(category.id) ?? []
+  }));
+  const details = subject.enrollments.map(enrollment => {
+    const marks = new Map(enrollment.scores.map(score => [score.assessmentId, score]));
+    const finalPercent = calculateFinal(categoryTree.map(category => ({
+      id: category.id, parentId: category.parentId, weight: category.weight, conversionBase: category.conversionBase,
+      assessments: category.assessments.map(item => ({
+        title: item.title, maxScore: item.maxScore, weight: item.weight,
+        scores: marks.has(item.id) ? [marks.get(item.id)!] : []
+      }))
+    })));
+    return { ...enrollment, finalPercent };
+  });
   return NextResponse.json({ subject: { ...subject, enrollments: details } });
 }
 
@@ -32,10 +69,32 @@ const bandsSchema = z.object({ gradeBands: z.array(z.object({ id: z.string().opt
 const subjectDetailsSchema = z.object({ updateSubject: z.object({ classId: z.string().trim().min(1).max(40), code: z.string().trim().min(1).max(30), title: z.string().trim().min(2).max(160), term: z.string().trim().min(1).max(40), academicYear: z.string().trim().min(4).max(20), schedule: z.string().trim().max(4000).nullable(), courseYear: z.string().trim().max(80).nullable() }) });
 export async function PATCH(request: Request, context: Context) {
   const teacher = await requireRole("TEACHER"); if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { subjectId } = await context.params; const subject = await ownedSubject(subjectId, teacher.id, teacher.schoolId);
-  if (!subject) return NextResponse.json({ error: "Subject not found" }, { status: 404 });
+  const { subjectId } = await context.params;
   const input = await request.json().catch(() => null);
   if (!input || typeof input !== "object" || Array.isArray(input)) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  if ("updateSubject" in input) {
+    const slim = await prisma.subject.findFirst({
+      where: { id: subjectId, teacherId: teacher.id, schoolId: teacher.schoolId },
+      select: { id: true, gradeStatus: true }
+    });
+    if (!slim) return NextResponse.json({ error: "Subject not found" }, { status: 404 });
+    if (slim.gradeStatus !== "DRAFT") return NextResponse.json({ error: "Recall submitted grades before editing class details." }, { status: 409 });
+    const parsed = subjectDetailsSchema.safeParse(input);
+    if (!parsed.success) return NextResponse.json({ error: "Check the Class ID and class details." }, { status: 400 });
+    const details = parsed.data.updateSubject;
+    if (details.term === "Trimester") details.term = "3rd Semester";
+    if (await prisma.subject.findFirst({
+      where: { schoolId: teacher.schoolId, id: { not: subjectId }, classId: { equals: details.classId, mode: "insensitive" } },
+      select: { id: true }
+    })) return NextResponse.json({ error: "That Class ID is already used in this school." }, { status: 409 });
+    await prisma.$transaction([
+      prisma.subject.update({ where: { id: subjectId }, data: details }),
+      prisma.auditEvent.create({ data: { actorId: teacher.id, action: "updated class identity, schedule, or course details", entity: "subject", entityId: subjectId } })
+    ]);
+    return NextResponse.json({ ok: true });
+  }
+  const subject = await ownedSubjectForMutation(subjectId, teacher.id, teacher.schoolId);
+  if (!subject) return NextResponse.json({ error: "Subject not found" }, { status: 404 });
   if ("setStudentVisibility" in input) {
     const parsed = z.object({ setStudentVisibility: z.boolean() }).safeParse(input);
     if (!parsed.success) return NextResponse.json({ error: "Choose visible or hidden." }, { status: 400 });
@@ -82,16 +141,6 @@ export async function PATCH(request: Request, context: Context) {
       prisma.auditEvent.create({ data: { actorId: teacher.id, action: "recalled submitted grades to draft", entity: "subject", entityId: subjectId } })
     ]);
     return NextResponse.json({ ok: true, gradeStatus: "DRAFT" });
-  }
-  if ("updateSubject" in input) {
-    if (subject.gradeStatus !== "DRAFT") return NextResponse.json({ error: "Recall submitted grades before editing class details." }, { status: 409 });
-    const parsed = subjectDetailsSchema.safeParse(input); if (!parsed.success) return NextResponse.json({ error: "Check the Class ID and class details." }, { status: 400 });
-    const details = parsed.data.updateSubject;
-    if (details.term === "Trimester") details.term = "3rd Semester";
-    if (await prisma.subject.findFirst({ where: { schoolId: teacher.schoolId, id: { not: subjectId }, classId: { equals: details.classId, mode: "insensitive" } }, select: { id: true } })) return NextResponse.json({ error: "That Class ID is already used in this school." }, { status: 409 });
-    await prisma.subject.update({ where: { id: subjectId }, data: details });
-    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "updated class identity, schedule, or course details", entity: "subject", entityId: subjectId } });
-    return NextResponse.json({ ok: true });
   }
   if ("deleteSubject" in input) {
     if (input.deleteSubject !== true) return NextResponse.json({ error: "Confirm class deletion." }, { status: 400 });
