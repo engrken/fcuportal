@@ -14,6 +14,7 @@ import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
 import { buildWorkbookPages, workbookWidths } from "@/lib/scorebook-layout";
 
 type User = { id: string; role: string; fullName: string; email: string; isTenantManager?: boolean; emailDeliveryEnabled?: boolean; profileImagePath: string | null; studentNumber: string | null; courseProgram?: string | null; yearLevel?: string | null; school: { id: string; slug: string; name: string; shortName: string; portalTitle: string; logoText: string; logoPath: string | null; primaryColor: string } };
+type WorkbookChange = { subjectId: string; enrollmentId: string; assessmentId: string; points: number | null; remark: "EXCUSED" | "ABSENT" | "DID_NOT_SUBMIT" | null };
 type AttendanceMark = { subjectId: string; enrollmentId: string; assessmentId: string; remark: "PRESENT" | "ABSENT" | "EXCUSED" | null };
 type Subject = { id: string; classId: string | null; code: string; title: string; term: string; academicYear: string; schedule: string | null; courseYear: string | null; isPublished: boolean; gradeStatus: "DRAFT" | "SUBMITTED" | "VERIFIED"; submittedAt: string | null; verifiedAt: string | null; _count?: { enrollments: number } };
 type Category = { id: string; parentId: string | null; name: string; weight: number; conversionBase: number; sortOrder: number };
@@ -460,6 +461,11 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   const [bulkScoresOpen, setBulkScoresOpen] = useState(false); const [bulkFileName, setBulkFileName] = useState(""); const [bulkOperations, setBulkOperations] = useState<Array<{enrollmentId:string;assessmentId:string;points:number|null;remark:"EXCUSED"|"ABSENT"|"DID_NOT_SUBMIT"|null}>>([]); const [bulkRowsPreview, setBulkRowsPreview] = useState<Array<{row:number;student:string;studentNumber:string;cells:number;errors:string[]}>>([]); const [bulkErrors, setBulkErrors] = useState<string[]>([]);
   const [gradeChangeEnrollmentId, setGradeChangeEnrollmentId] = useState(""); const [gradeChangeGrade, setGradeChangeGrade] = useState("AUTO"); const [gradeChangeRemark, setGradeChangeRemark] = useState("AUTO"); const [gradeChangeReason, setGradeChangeReason] = useState("");
   const [attendanceQuickOpenId, setAttendanceQuickOpenId] = useState(initialAttendanceToday && initialClassId ? initialClassId : "");
+  const workbookPendingRef = useRef<Map<string, WorkbookChange>>(new Map());
+  const workbookTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const workbookInflightRef = useRef<Promise<boolean> | null>(null);
+  const workbookFailedRef = useRef(false);
+  const [workbookSaveState, setWorkbookSaveState] = useState<"idle" | "queued" | "saving" | "saved" | "error">("idle");
   const attendancePendingRef = useRef<Map<string, AttendanceMark>>(new Map());
   const attendanceSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const attendanceSavingRef = useRef(false);
@@ -469,6 +475,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     const onPageHide = () => {
       if (attendanceSaveTimerRef.current) clearTimeout(attendanceSaveTimerRef.current);
       void flushAttendanceMarks();
+      void flushWorkbookScores();
     };
     window.addEventListener("pagehide", onPageHide);
     return () => { window.removeEventListener("pagehide", onPageHide); onPageHide(); };
@@ -762,14 +769,17 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   }
   async function submitGrades() {
     if (!detail || !window.confirm("Submit this grade record to students? Visibility is controlled separately in Manage grade visibility. Submitting the grade record will not change who can see it.")) return;
+    if (!await ensureWorkbookSaved()) { setErr("Save pending workbook changes before changing grade status."); return; }
     await run(async () => { await api(`/api/teacher/subjects/${detail.id}`, { method: "PATCH", body: JSON.stringify({ submitGrades: true }) }); await loadDetail(); await loadSubjects(); }, "Class grade record submitted. Student visibility is unchanged. Mark Verified to Registrar only after the official school-record submission.");
   }
   async function verifyGrades() {
     if (!detail || detail.gradeStatus !== "SUBMITTED" || !window.confirm("Confirm that you have officially submitted this class's grades on the school's official records and to the Registrar? This will mark student results as final.")) return;
+    if (!await ensureWorkbookSaved()) { setErr("Save pending workbook changes before changing grade status."); return; }
     await run(async () => { await api(`/api/teacher/subjects/${detail.id}`, { method: "PATCH", body: JSON.stringify({ verifyGrades: true }) }); await loadDetail(); await loadSubjects(); }, "Verified. Students now see the result as final and confirmed submitted to the Registrar.");
   }
   async function recallSubmittedGrades() {
     if (!detail || detail.gradeStatus === "DRAFT" || !window.confirm("Recall this grade record? Students will no longer see these grades, and the class record will return to draft for editing.")) return;
+    if (!await ensureWorkbookSaved()) { setErr("Save pending workbook changes before changing grade status."); return; }
     await run(async () => { await api(`/api/teacher/subjects/${detail.id}`, { method: "PATCH", body: JSON.stringify({ recallGrades: true }) }); await loadDetail(); await loadSubjects(); }, "Submission recalled. The class record is back in draft and hidden from students.");
   }
   function updateScoreLocally(enrollmentId: string, assessmentId: string, points: number | null, remark: string | null) {
@@ -833,18 +843,70 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     attendanceSaveTimerRef.current = setTimeout(() => { void flushAttendanceMarks(); }, 300);
   }
 
-  async function saveScore(enrollmentId: string, assessmentId: string, value: string, remark: string | null = null) {
-    const points = remark ? null : value.trim() === "" ? null : Number(value);
-    const scoreRemark = remark || null;
-    setErr(""); setNotice("");
-    updateScoreLocally(enrollmentId, assessmentId, points, scoreRemark);
-    try {
-      await api("/api/teacher/scores", { method: "PUT", body: JSON.stringify({ enrollmentId, assessmentId, points, remark: scoreRemark }) });
-      setNotice("Workbook change saved.");
-    } catch (error) {
-      setErr(error instanceof Error ? error.message : "Could not save the workbook change.");
-      void loadDetail().catch(refreshError => setErr(refreshError instanceof Error ? refreshError.message : "Could not refresh the class record."));
+  async function flushWorkbookScores(): Promise<boolean> {
+    if (workbookInflightRef.current) return workbookInflightRef.current;
+    if (workbookFailedRef.current) return false;
+    if (workbookTimerRef.current) clearTimeout(workbookTimerRef.current);
+    workbookTimerRef.current = null;
+    if (!workbookPendingRef.current.size) return true;
+    const entries = [...workbookPendingRef.current.entries()];
+    const subjectId = entries[0][1].subjectId;
+    const batch = entries.filter(([, score]) => score.subjectId === subjectId).slice(0, 50);
+    for (const [key] of batch) workbookPendingRef.current.delete(key);
+    setWorkbookSaveState("saving");
+    const task = (async () => {
+      try {
+        await api(`/api/teacher/subjects/${subjectId}/bulk-scores`, {
+          method: "POST", keepalive: true,
+          body: JSON.stringify({ source: "workbook", scores: batch.map(([, {enrollmentId, assessmentId, points, remark}]) =>
+            ({ enrollmentId, assessmentId, points, remark })) })
+        });
+        setWorkbookSaveState(workbookPendingRef.current.size ? "queued" : "saved");
+        return true;
+      } catch (error) {
+        for (const [key, change] of batch) {
+          if (!workbookPendingRef.current.has(key)) workbookPendingRef.current.set(key, change);
+        }
+        workbookFailedRef.current = true;
+        setWorkbookSaveState("error");
+        setErr(error instanceof Error ? `Workbook not saved: ${error.message}` : "Workbook not saved. Retry pending changes.");
+        return false;
+      } finally {
+        workbookInflightRef.current = null;
+        if (workbookPendingRef.current.size && !workbookFailedRef.current) {
+          workbookTimerRef.current = setTimeout(() => { void flushWorkbookScores(); }, 80);
+        }
+      }
+    })();
+    workbookInflightRef.current = task;
+    return task;
+  }
+  async function ensureWorkbookSaved(): Promise<boolean> {
+    if (workbookTimerRef.current) clearTimeout(workbookTimerRef.current);
+    while (workbookInflightRef.current || workbookPendingRef.current.size) {
+      if (!await flushWorkbookScores()) return false;
     }
+    return true;
+  }
+  function saveScore(enrollmentId: string, assessmentId: string, value: string, remark: string | null = null) {
+    if (!detail || detail.gradeStatus === "VERIFIED") return;
+    const item = detail.assessments.find(item => item.id === assessmentId);
+    if (!item || item.title.toLocaleLowerCase().startsWith("attendance ·")) return;
+    const points = remark ? null : value.trim() === "" ? null : Number(value);
+    if (points !== null && (!Number.isFinite(points) || points < 0 || points > item.maxScore)) {
+      setErr(`Enter a valid score between 0 and ${item.maxScore} for ${item.title}.`);
+      return;
+    }
+    const scoreRemark = (remark || null) as WorkbookChange["remark"];
+    setErr("");
+    updateScoreLocally(enrollmentId, assessmentId, points, scoreRemark);
+    const subjectId = detail.id;
+    workbookPendingRef.current.set(`${subjectId}:${enrollmentId}:${assessmentId}`,
+      { subjectId, enrollmentId, assessmentId, points, remark: scoreRemark });
+    workbookFailedRef.current = false;
+    setWorkbookSaveState("queued");
+    if (workbookTimerRef.current) clearTimeout(workbookTimerRef.current);
+    workbookTimerRef.current = setTimeout(() => { void flushWorkbookScores(); }, 300);
   }
   async function emailVerifiedGrades() {
     if (!detail || detail.gradeStatus !== "VERIFIED" || !window.confirm("Send each student's final grade summary to the email address on their student record? Emails will be sent individually.")) return;
@@ -930,6 +992,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   }
   async function applyBulkScores() {
     if(!detail||bulkErrors.length||!bulkOperations.length)return;
+    if (!await ensureWorkbookSaved()) { setErr("Retry pending workbook changes before importing scores."); return; }
     await run(async()=>{await api(`/api/teacher/subjects/${detail.id}/bulk-scores`,{method:"POST",body:JSON.stringify({scores:bulkOperations})});await loadDetail();setBulkScoresOpen(false);setBulkFileName("");setBulkOperations([]);setBulkRowsPreview([]);setBulkErrors([]);},`${bulkOperations.length} score cell(s) imported.`);
   }
   function downloadRosterTemplate() {
@@ -1203,6 +1266,10 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
             <div className="scorebook-legend"><span><b>Danger indicator</b> appears when absences exceed 20% of non-excused class days.</span><span>To change a class schedule, edit the subject details before recording sessions.</span></div>
           </section>}
           {classSection === "record" && <section id="class-section-record" className="surface gradebook-card scorebook-section" ref={scorebookRegionRef}><div className="section-heading"><div><span className="eyebrow">ELECTRONIC CLASS RECORD</span><h2>Record scores</h2><p className="muted">Enter scores by student and assessment. Each category includes an Equivalent (%) column showing the earned share of its parent Lecture or Laboratory allocation (for example, 93% × 25% = 23.25%). The final course grade also applies the top-level Lecture/Laboratory weights. Changes save when you leave a field. Pending work is not treated as zero.</p></div><div className="scorebook-toolbar"><span className="gradebook-count">{filteredEnrollments.length} of {detail.enrollments.length} students · {detail.assessments.length} items</span><label className="scorebook-contribution-toggle"><input type="checkbox" className="form-check-input" checked={showWeightBreakdown} onChange={event=>setShowWeightBreakdown(event.target.checked)} />Detailed breakdown row</label><button className="btn btn-outline-primary btn-sm" onClick={()=>downloadScoreCsv(true)} disabled={!scorebookAssessments.length}>Download template</button><button className="btn btn-outline-primary btn-sm" onClick={()=>{setBulkScoresOpen(true);setBulkErrors([]);setBulkRowsPreview([]);setBulkOperations([])}} disabled={!scorebookAssessments.length||detail.gradeStatus==="VERIFIED"}>Import scores</button><button className="btn btn-outline-secondary btn-sm" onClick={()=>downloadScoreCsv(false)} disabled={!scorebookAssessments.length}>Export scores</button></div></div>
+            {workbookSaveState !== "idle" && <div className={`small mb-2 ${workbookSaveState === "error" ? "text-danger" : "text-secondary"}`} role="status" aria-live="polite">
+              {workbookSaveState === "queued" ? "Workbook changes queued…" : workbookSaveState === "saving" ? "Saving workbook…" : workbookSaveState === "saved" ? "✓ Workbook saved" : "Workbook not saved."}
+              {workbookSaveState === "error" && <button type="button" className="btn btn-link btn-sm" onClick={() => { workbookFailedRef.current = false; void flushWorkbookScores(); }}>Retry saving</button>}
+            </div>}
             {(err||notice)&&<div className="portal-toast-stack" aria-live="polite" aria-atomic="false">{err&&<div className="portal-toast error" role="alert"><div><b>Needs attention</b><p>{err}</p>{notificationTarget(err)&&<button className="toast-location" onClick={goToNotificationTarget}>Check {notificationTarget(err)?.label} ↗</button>}</div><button className="toast-dismiss" aria-label="Dismiss error" onClick={()=>setErr("")}>×</button></div>}{notice&&<div className="portal-toast success" role="status"><div><b>Saved</b><p>{notice}</p></div><button className="toast-dismiss" aria-label="Dismiss notification" onClick={()=>setNotice("")}>×</button></div>}</div>}
             {scorebookAssessments.length > 0 && <div className="scorebook-fitbar" aria-label="Workbook column layout controls">
               <div className="scorebook-fitbar-summary">
