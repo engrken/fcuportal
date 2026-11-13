@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Fragment, useEffect, useState, type FormEvent } from "react";
 import AccountMenu, { type AccountTheme } from "./AccountMenu";
+import { saveSagaTheme } from "./ThemeSync";
 
 const statusLabels = {
   VERIFIED: "Verified",
@@ -50,7 +51,7 @@ export default function TenantRoster({ school, schools, roster, managerName, man
     if (saved === "dark" || saved === "light") setTheme(saved);
   }, []);
   function setAppearance(next: AccountTheme) {
-    window.localStorage.setItem("saga-portal-theme", next);
+    saveSagaTheme(next);
     setTheme(next);
   }
   async function logout() {
