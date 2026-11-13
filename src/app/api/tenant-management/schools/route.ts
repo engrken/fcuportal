@@ -99,7 +99,7 @@ export async function PATCH(request: Request) {
   if (school.id === manager.schoolId && subscriptionStatus !== "ACTIVE") return NextResponse.json({ error: "The tenant manager’s own school workspace cannot be suspended from this account." }, { status: 409 });
   if (payment && (!payment.amount || !payment.method)) return NextResponse.json({ error: "A payment record needs an amount and payment method." }, { status: 400 });
   const expiry = subscriptionExpiresAt ? new Date(subscriptionExpiresAt) : null;
-  if (subscriptionExpiresAt && (!/^\\d{4}-\\d{2}-\\d{2}$/.test(subscriptionExpiresAt) || !expiry || Number.isNaN(expiry.getTime()) || expiry.toISOString().slice(0, 10) !== subscriptionExpiresAt)) {
+  if (subscriptionExpiresAt && (!/^\d{4}-\d{2}-\d{2}$/.test(subscriptionExpiresAt) || !expiry || Number.isNaN(expiry.getTime()) || expiry.toISOString().slice(0, 10) !== subscriptionExpiresAt)) {
     return NextResponse.json({ error: "Choose a valid subscription expiry date." }, { status: 400 });
   }
   const now = new Date();
