@@ -22,8 +22,7 @@ export function workbookWidths(containerWidth: number) {
     final: Math.round(Math.max(76, Math.min(104, width * .064))),
     remark: Math.round(Math.max(104, Math.min(144, width * .086))),
     assessment: 78,
-    equivalent: 73,
-    weight: 92
+    equivalent: 73
   };
 }
 export function workbookColumnBudget(width: number) {
@@ -32,12 +31,12 @@ export function workbookColumnBudget(width: number) {
 }
 export function estimateWorkbookSegmentWidth(count: number, width: number) {
   const w = workbookWidths(width);
-  return count * w.assessment + w.equivalent + w.weight;
+  return count * w.assessment + w.equivalent;
 }
 export function buildWorkbookPages(categories: WorkbookCategory[], width: number): WorkbookPage[] {
   const limit = workbookColumnBudget(width);
   const widths = workbookWidths(width);
-  const maxItems = Math.max(1, Math.floor((limit - widths.equivalent - widths.weight) / widths.assessment));
+  const maxItems = Math.max(1, Math.floor((limit - widths.equivalent) / widths.assessment));
   const chunks: WorkbookSegment[] = [];
   for (const category of categories) {
     if (!category.assessmentIds.length) continue;

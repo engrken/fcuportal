@@ -43,6 +43,11 @@ test("no category items does not create phantom pages",()=>{
  assert.deepEqual(buildWorkbookPages([],1200),[]);
  assert.deepEqual(buildWorkbookPages([{id:"a",label:"No items",assessmentIds:[]}],1200),[]);
 });
+test("each assessment group reserves only an Equivalent subtotal",()=>{
+ const widths=workbookWidths(1200);
+ assert.equal(estimateWorkbookSegmentWidth(3,1200),3*widths.assessment+widths.equivalent);
+ assert.equal(Object.hasOwn(widths,"weight"),false);
+});
 test("student name and summary column widths remain useful",()=>{
  const w=workbookWidths(1500);
  assert.ok(w.student>=200);
