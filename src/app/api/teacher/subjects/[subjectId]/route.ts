@@ -289,8 +289,31 @@ export async function PATCH(request: Request, context: Context) {
     const attendanceDates = items.filter(item => item.title.toLocaleLowerCase().startsWith("attendance ·")).map(item => item.dueDate?.slice(0, 10));
     if (attendanceDates.some((date, index) => date && attendanceDates.indexOf(date) !== index)) return NextResponse.json({ error: "Only one attendance day can be recorded per date." }, { status: 409 });
     if (items.some(item => item.maxScore < Math.max(0, ...subject.enrollments.flatMap(enrollment => enrollment.scores.filter(score => score.assessmentId === item.id).map(score => score.points ?? 0))))) return NextResponse.json({ error: "Perfect score cannot be lower than a score already entered." }, { status: 400 });
-    for (const item of items) await prisma.assessment.update({ where: { id: item.id }, data: { categoryId: item.categoryId, title: item.title, maxScore: item.maxScore, weight: item.weight, dueDate: item.dueDate ? new Date(item.dueDate) : null, scheduleOverrideReason: item.scheduleOverrideReason || null, attendanceType: item.attendanceType || null } });
-    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "updated assessment setup", entity: "subject", entityId: subjectId } });
+    // An onBlur edit usually changes a single row. Do not send up to 200
+    // identical UPDATE statements to Neon on each edit.
+    const existingById = new Map(subject.assessments.map(item => [item.id, item]));
+    const changed = items.filter(item => {
+      const previous = existingById.get(item.id)!;
+      return item.categoryId !== previous.categoryId || item.title !== previous.title ||
+        item.maxScore !== previous.maxScore || (item.weight ?? null) !== (previous.weight ?? null) ||
+        (item.dueDate?.slice(0, 10) || null) !== (previous.dueDate?.toISOString().slice(0, 10) || null) ||
+        (item.scheduleOverrideReason || null) !== (previous.scheduleOverrideReason || null) ||
+        (item.attendanceType || null) !== (previous.attendanceType || null);
+    });
+    if (changed.length) {
+      await prisma.$transaction([
+        ...changed.map(item => prisma.assessment.update({
+          where: { id: item.id },
+          data: {
+            categoryId: item.categoryId, title: item.title, maxScore: item.maxScore, weight: item.weight,
+            dueDate: item.dueDate ? new Date(item.dueDate) : null,
+            scheduleOverrideReason: item.scheduleOverrideReason || null,
+            attendanceType: item.attendanceType || null
+          }
+        })),
+        prisma.auditEvent.create({ data: { actorId: teacher.id, action: `updated ${changed.length} assessment item(s)`, entity: "subject", entityId: subjectId } })
+      ]);
+    }
     return NextResponse.json({ ok: true });
   }
   if ("gradeBands" in input) {
@@ -338,8 +361,20 @@ export async function PATCH(request: Request, context: Context) {
       const existing = subject.categories.find(c => c.id === category.id)!;
       if ((category.parentId ?? null) !== (existing.parentId ?? null) && subject.assessments.some(a => a.categoryId === existing.id)) return NextResponse.json({ error: "Move assessments before changing a category that contains them." }, { status: 409 });
     }
-    for (const category of values) await prisma.gradeCategory.update({ where: { id: category.id }, data: { parentId: category.parentId ?? null, name: category.name, weight: category.weight, conversionBase: category.conversionBase } });
-    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "updated grading weights", entity: "subject", entityId: subjectId } });
+    const changed = values.filter(category => {
+      const old = subject.categories.find(item => item.id === category.id)!;
+      return (category.parentId ?? null) !== (old.parentId ?? null) || category.name !== old.name ||
+        category.weight !== old.weight || category.conversionBase !== old.conversionBase;
+    });
+    if (changed.length) {
+      await prisma.$transaction([
+        ...changed.map(category => prisma.gradeCategory.update({
+          where: { id: category.id },
+          data: { parentId: category.parentId ?? null, name: category.name, weight: category.weight, conversionBase: category.conversionBase }
+        })),
+        prisma.auditEvent.create({ data: { actorId: teacher.id, action: "updated grading weights", entity: "subject", entityId: subjectId } })
+      ]);
+    }
     return NextResponse.json({ ok: true });
   }
   return NextResponse.json({ error: "Unsupported update." }, { status: 400 });
@@ -347,7 +382,18 @@ export async function PATCH(request: Request, context: Context) {
 
 export async function POST(request: Request, context: Context) {
   const teacher = await requireRole("TEACHER"); if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { subjectId } = await context.params; const subject = await ownedSubject(subjectId, teacher.id, teacher.schoolId);
+  // Class creation paths do not need every historic score, grade correction
+  // record or final-grade calculation. Fetch only the fields used below.
+  const { subjectId } = await context.params;
+  const subject = await prisma.subject.findFirst({
+    where: { id: subjectId, teacherId: teacher.id, schoolId: teacher.schoolId },
+    select: {
+      id: true, gradeStatus: true, academicYear: true, schedule: true,
+      categories: { orderBy: { sortOrder: "asc" } },
+      assessments: { select: { id: true, categoryId: true, title: true, weight: true, dueDate: true } },
+      enrollments: { select: { id: true, studentNumber: true } }
+    }
+  });
   if (!subject) return NextResponse.json({ error: "Subject not found" }, { status: 404 });
   if (subject.gradeStatus === "VERIFIED") return NextResponse.json({ error: "This grade record has been finalized. Recall it before making changes." }, { status: 409 });
   const input = await request.json();
@@ -414,16 +460,41 @@ export async function POST(request: Request, context: Context) {
     const rosterSeats = await prisma.enrollment.count({ where: { subject: { schoolId: teacher.schoolId, academicYear: subject.academicYear } } });
     const seatLimit = SCHOOL_PLAN_LIMITS[school?.plan || "FREE"].studentSeats;
     if (rosterSeats + parsed.data.students.length > seatLimit) return NextResponse.json({ error: `Your school plan allows ${seatLimit} student-class seats. Upgrade the school plan to add more roster entries.` }, { status: 402 });
-    const numbers = [...new Set(parsed.data.students.map(student => student.studentNumber?.trim().toUpperCase()).filter((number): number is string => Boolean(number)))];
-    const matchingStudents = numbers.length ? await prisma.user.findMany({ where: { schoolId: teacher.schoolId, role: "STUDENT", studentNumber: { in: numbers } }, select: { id: true, studentNumber: true } }) : [];
-    const studentByNumber = new Map(matchingStudents.map(student => [student.studentNumber, student.id]));
-    const created = [];
-    for (const s of parsed.data.students) {
-      const studentNumber = s.studentNumber?.trim().toUpperCase() || null;
-      const item = await prisma.enrollment.create({ data: { subjectId, studentName: s.studentName, studentNumber, studentUserId: studentNumber ? studentByNumber.get(studentNumber) ?? null : null } });
-      created.push(item);
+    const normalized = parsed.data.students.map(student => ({
+      studentName: student.studentName,
+      studentNumber: student.studentNumber?.trim().toUpperCase() || null
+    }));
+    const allNumbers = normalized.flatMap(student => student.studentNumber ? [student.studentNumber] : []);
+    if (new Set(allNumbers).size !== allNumbers.length) {
+      return NextResponse.json({ error: "Student IDs must be unique within the imported roster." }, { status: 409 });
     }
-    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: `added ${created.length} roster record(s)`, entity: "subject", entityId: subjectId } });
+    const numbers = [...new Set(allNumbers)];
+    const [existing, matchingStudents] = await Promise.all([
+      numbers.length ? prisma.enrollment.findMany({ where: { subjectId, studentNumber: { in: numbers } }, select: { studentNumber: true } }) : Promise.resolve([]),
+      numbers.length ? prisma.user.findMany({ where: { schoolId: teacher.schoolId, role: "STUDENT", studentNumber: { in: numbers } }, select: { id: true, studentNumber: true } }) : Promise.resolve([])
+    ]);
+    if (existing.length) return NextResponse.json({ error: "A student ID already exists in this class roster. Remove the duplicate from the import." }, { status: 409 });
+    const studentByNumber = new Map(matchingStudents.map(student => [student.studentNumber, student.id]));
+    let created;
+    try {
+      created = await prisma.$transaction(async tx => {
+        const rows = await tx.enrollment.createManyAndReturn({
+          data: normalized.map(student => ({
+            subjectId, studentName: student.studentName,
+            studentNumber: student.studentNumber,
+            studentUserId: student.studentNumber ? studentByNumber.get(student.studentNumber) ?? null : null
+          }))
+        });
+        await tx.auditEvent.create({ data: { actorId: teacher.id, action: `added ${rows.length} roster record(s)`, entity: "subject", entityId: subjectId } });
+        return rows;
+      });
+    } catch (error) {
+      // A concurrent import may have inserted the same class/student ID.
+      if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
+        return NextResponse.json({ error: "One or more student IDs are already enrolled in this class." }, { status: 409 });
+      }
+      throw error;
+    }
     return NextResponse.json({ count: created.length, enrollments: created }, { status: 201 });
   }
   const parsed = assessmentSchema.safeParse(input); if (!parsed.success) return NextResponse.json({ error: "Check assessment title, category and maximum score." }, { status: 400 });
