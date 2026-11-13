@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
+import { Prisma } from "@/generated/prisma/client";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -121,20 +123,26 @@ export async function PUT(request: Request, context: Context) {
     return NextResponse.json({ error: "One or more attendance cells do not belong to this class." }, { status: 400 });
   }
 
-  await prisma.$transaction([
-    ...changes.map(change => prisma.score.upsert({
-      where: { enrollmentId_assessmentId: { enrollmentId: change.enrollmentId, assessmentId: change.assessmentId } },
-      create: { enrollmentId: change.enrollmentId, assessmentId: change.assessmentId, points: null, remark: change.remark },
-      update: { points: null, remark: change.remark }
-    })),
-    prisma.auditEvent.createMany({
+  // Use one parameterized SQL upsert for the batch. One Prisma upsert per
+  // student would serialize many Neon queries and can hit transaction timeouts.
+  await prisma.$transaction(async tx => {
+    const values = changes.map(change => Prisma.sql`(${randomUUID()}, ${change.enrollmentId}, ${change.assessmentId}, NULL, ${change.remark}, CURRENT_TIMESTAMP)`);
+    await tx.$executeRaw(Prisma.sql`
+      INSERT INTO "Score" ("id", "enrollmentId", "assessmentId", "points", "remark", "updatedAt")
+      VALUES ${Prisma.join(values)}
+      ON CONFLICT ("enrollmentId", "assessmentId") DO UPDATE SET
+        "points" = NULL,
+        "remark" = EXCLUDED."remark",
+        "updatedAt" = CURRENT_TIMESTAMP
+    `);
+    await tx.auditEvent.createMany({
       data: changes.map(change => ({
         actorId: teacher.id,
         action: `updated attendance ${change.remark || "NOT_MARKED"}`,
         entity: "score",
         entityId: `${change.enrollmentId}:${change.assessmentId}`
       }))
-    })
-  ]);
+    });
+  });
   return NextResponse.json({ ok: true, saved: changes.length });
 }
