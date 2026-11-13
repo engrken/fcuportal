@@ -530,7 +530,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     return null;
   }
   function goToNotificationTarget() {
-    if(!err||!detail)return; const target=notificationTarget(err); if(!target)return; setClassSection(target.section); window.setTimeout(()=>document.getElementById(`class-section-${target.section}`)?.scrollIntoView({behavior:"smooth",block:"start"}),100);
+    if(!err||!detail)return; const target=notificationTarget(err); if(!target)return; openClassSection(target.section as ClassSection); window.setTimeout(()=>document.getElementById(`class-section-${target.section}`)?.scrollIntoView({behavior:"smooth",block:"start"}),100);
   }
   async function run(action: () => Promise<void>, success = "Saved.") { setBusy(true); setErr(""); setNotice(""); try { await action(); setNotice(success); } catch (e) { setErr(e instanceof Error ? e.message : "Something went wrong."); } finally { setBusy(false); } }
   async function createSubject(e: FormEvent<HTMLFormElement>) {
