@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { createSession } from "@/lib/auth";
 import { checkAuthThrottle } from "@/lib/rate-limit";
 import { SCHOOL_PLAN_LIMITS } from "@/lib/plans";
+import { resolveTeacherSchoolTarget } from "@/lib/teacher-school-registration";
 import type { School } from "@/generated/prisma/client";
 import { consumeEmailChallenge, emailVerificationFields, issueEmailChallenge } from "@/lib/email-verification";
 
@@ -39,6 +40,7 @@ export async function POST(request: Request) {
     }
     const { schoolId, schoolName, fullName, email, password, role, studentNumber, inviteCode, termsVersion, challengeId, code } = parsed.data;
     const normalizedEmail = email.toLowerCase();
+    const teacherSchoolTarget = role === "TEACHER" ? resolveTeacherSchoolTarget(schoolId, schoolName) : null;
     if (Boolean(challengeId) !== Boolean(code)) return NextResponse.json({ error: "Request a code and enter all six digits." }, { status: 400 });
     const phase = challengeId ? "verify" : "send";
     const throttle = await checkAuthThrottle(request, `register:${phase}:${role}:${normalizedEmail}`, challengeId ? 8 : 4, undefined, "identity");
@@ -51,19 +53,19 @@ export async function POST(request: Request) {
     }
     if (role === "TEACHER" && !fullName) return NextResponse.json({ error: "Enter your full name." }, { status: 400 });
     if (role === "TEACHER") {
-      const existingSchoolSelected = Boolean(schoolId);
-      const newSchoolNamed = Boolean(schoolName?.trim());
-      if (existingSchoolSelected === newSchoolNamed) {
+      if (!teacherSchoolTarget) {
         return NextResponse.json({ error: "Select an existing school or choose Not listed and enter the new school name." }, { status: 400 });
       }
-      if (existingSchoolSelected) {
-        const selectedSchool = await prisma.school.findUnique({ where: { id: schoolId! }, select: { isActive: true } });
+      if (teacherSchoolTarget.kind === "existing") {
+        const selectedSchool = await prisma.school.findUnique({
+          where: { id: teacherSchoolTarget.schoolId },
+          select: { isActive: true }
+        });
         if (!selectedSchool) return NextResponse.json({ error: "School not found. Refresh the list and select a school." }, { status: 404 });
         if (!selectedSchool.isActive) return NextResponse.json({ error: "This school workspace is inactive. Contact SAGA support." }, { status: 403 });
       } else {
-        const normalizedSchoolName = schoolName!.trim().replace(/\s+/g, " ");
         const alreadyListed = await prisma.school.findFirst({
-          where: { name: { equals: normalizedSchoolName, mode: "insensitive" } },
+          where: { name: { equals: teacherSchoolTarget.schoolName, mode: "insensitive" } },
           select: { isActive: true }
         });
         if (alreadyListed) return NextResponse.json({
@@ -85,7 +87,12 @@ export async function POST(request: Request) {
       }
     }
 
-    const binding = ["register", role, schoolId || "", schoolName?.trim().replace(/\s+/g, " ").toLowerCase() || "", normalizedStudentNumber || "", normalizedEmail];
+    const binding = [
+      "register", role,
+      teacherSchoolTarget?.kind === "existing" ? teacherSchoolTarget.schoolId : role === "STUDENT" ? schoolId || "" : "",
+      teacherSchoolTarget?.kind === "new" ? teacherSchoolTarget.schoolName.toLowerCase() : "",
+      normalizedStudentNumber || "", normalizedEmail
+    ];
     if (!challengeId || !code) {
       const id = await issueEmailChallenge(binding, normalizedEmail);
       return NextResponse.json({ challengeId: id }, { status: 202, headers: { "Cache-Control": "no-store" } });
@@ -95,14 +102,14 @@ export async function POST(request: Request) {
       if (!(await consumeEmailChallenge(tx, binding, challengeId, code))) return null;
       let school: School | null = null;
       if (role === "TEACHER") {
-        if (schoolId) {
+        if (teacherSchoolTarget?.kind === "existing") {
           // Existing-school registration must use the selected school ID.
           // Never create another school when an existing one was selected.
-          school = await tx.school.findUnique({ where: { id: schoolId } });
+          school = await tx.school.findUnique({ where: { id: teacherSchoolTarget.schoolId } });
           if (!school) throw new Error("SCHOOL_NOT_FOUND");
           if (!school.isActive) throw new Error("SCHOOL_INACTIVE");
         } else {
-          const normalizedSchoolName = schoolName!.trim().replace(/\s+/g, " ");
+          const normalizedSchoolName = teacherSchoolTarget!.kind === "new" ? teacherSchoolTarget.schoolName : "";
           // Serialize simultaneous attempts to register the same school.
           // This avoids duplicates even if two teachers verify their OTPs together.
           await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${normalizedSchoolName.toLowerCase()}))::text`;
