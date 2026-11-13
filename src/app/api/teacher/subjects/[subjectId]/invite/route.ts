@@ -10,7 +10,7 @@ function issueCode() {
   const bytes = randomBytes(12);
   return Array.from(bytes, byte => alphabet[byte % alphabet.length]).join("");
 }
-export function hashJoinCode(code: string) {
+function hashJoinCode(code: string) {
   return createHash("sha256").update(code).digest("hex");
 }
 

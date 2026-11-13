@@ -14,7 +14,7 @@ export async function GET() {
   const records = await prisma.enrollment.findMany({
     where: { subject: { schoolId: student.schoolId }, OR: [
       { studentUserId: student.id },
-      ...(student.studentNumber ? [{ studentNumber: { equals: student.studentNumber, mode: "insensitive" as const } }] : [])
+      ...(student.studentNumber ? [{ studentUserId: null, studentNumber: { equals: student.studentNumber.trim(), mode: "insensitive" as const } }] : [])
     ] },
     orderBy: { subject: { academicYear: "desc" } }, take: 100,
     select: {
