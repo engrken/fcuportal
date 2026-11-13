@@ -109,7 +109,8 @@ export async function POST(request: Request) {
           if (!school) throw new Error("SCHOOL_NOT_FOUND");
           if (!school.isActive) throw new Error("SCHOOL_INACTIVE");
         } else {
-          const normalizedSchoolName = teacherSchoolTarget!.kind === "new" ? teacherSchoolTarget.schoolName : "";
+          if (!teacherSchoolTarget || teacherSchoolTarget.kind !== "new") throw new Error("SCHOOL_NOT_READY");
+          const normalizedSchoolName = teacherSchoolTarget.schoolName;
           // Serialize simultaneous attempts to register the same school.
           // This avoids duplicates even if two teachers verify their OTPs together.
           await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${normalizedSchoolName.toLowerCase()}))::text`;
