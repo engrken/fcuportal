@@ -51,6 +51,32 @@ test("three-level major examination uses the root-group allocation (not double m
   assert.equal(result.items[0].earnedWithinRoot, 7.5);
 });
 
+test("Record Scores equivalent uses weight within root while final uses course weight", () => {
+  const categories = [
+    cat("lecture", null, 60, [], 70),
+    cat("major", "lecture", 50, [], 70),
+    cat("midterm", "major", 20, [scored(27, 50)]),
+    cat("reporter", "lecture", 25, [scored(90, 100)]),
+    cat("quiz", "lecture", 15, [scored(30, 100)])
+  ];
+  const { items } = calculateGradeBreakdown(categories);
+  const midterm = items.find(item => item.categoryId === "midterm");
+  const reporter = items.find(item => item.categoryId === "reporter");
+  const quiz = items.find(item => item.categoryId === "quiz");
+  assert.equal(midterm.percent, 67.8);
+  assert.equal(midterm.withinRootWeight, 20);
+  assert.equal(midterm.earnedWithinRoot, 13.56);
+  assert.equal(midterm.earnedCourse, 8.14);
+  assert.equal(reporter.percent, 93);
+  assert.equal(reporter.withinRootWeight, 25);
+  assert.equal(reporter.earnedWithinRoot, 23.25);
+  assert.equal(reporter.earnedCourse, 13.95);
+  assert.equal(quiz.percent, 51);
+  assert.equal(quiz.withinRootWeight, 15);
+  assert.equal(quiz.earnedWithinRoot, 7.65);
+  assert.equal(quiz.earnedCourse, 4.59);
+});
+
 test("base 70 exams show course contribution after transmutation", () => {
   const categories = [cat("exam", null, 15, [scored(80)], 70)];
   const result = calculateGradeBreakdown(categories);
