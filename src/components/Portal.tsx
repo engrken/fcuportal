@@ -209,37 +209,61 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
       }
     } catch { /* The workbook remains usable if the seal image cannot be loaded. */ }
   }
-  const columnCount = Math.max(11, categories.length + 4);
+  // Preserve the FCU-EOMS-RO-006-F layout while allowing any number of grade components.
+  // A = student number, B = name, C.. = component values, final columns = TG/FG/Remarks.
+  const gradeSlots = Math.max(6, categories.length);
+  const columnCount = gradeSlots + 5;
   const last = excelColumn(columnCount - 1);
+  const totalCol = gradeSlots + 2;
+  const ranges = categories.map((category, index) => ({
+    category,
+    start: 2 + Math.floor(index * gradeSlots / categories.length),
+    end: 1 + Math.floor((index + 1) * gradeSlots / categories.length)
+  }));
   const cells: Array<Array<{ value: unknown; style: number }>> = [];
-  const row = (values: Array<{ col: number; value: unknown; style?: number }>, count = columnCount) => {
-    const result: Array<{ value: unknown; style: number }> = Array.from({ length: count }, () => ({ value: "", style: 0 }));
+  const row = (values: Array<{ col: number; value: unknown; style?: number }>) => {
+    const result: Array<{ value: unknown; style: number }> = Array.from({ length: columnCount }, () => ({ value: "", style: 0 }));
     for (const item of values) result[item.col] = { value: item.value, style: item.style ?? 1 };
     cells.push(result);
   };
-  const fill = (start: number, end: number, value: unknown, style: number) => Array.from({ length: end - start + 1 }, (_, offset) => ({ col: start + offset, value: offset === 0 ? value : "", style }));
+  const fill = (start: number, end: number, value: unknown, style: number) =>
+    Array.from({ length: end - start + 1 }, (_, offset) => ({ col: start + offset, value: offset === 0 ? value : "", style }));
+  const rightStart = columnCount - 3;
+  // The top five rows match the university's official grading-sheets header.
   row([{ col: 0, value: logoPng ? "" : "FCU", style: 3 }, ...fill(1, columnCount - 1, "FILAMER CHRISTIAN UNIVERSITY, INC.", 3)]);
   row([{ col: 0, value: "", style: 2 }, ...fill(1, columnCount - 1, "Roxas Avenue, Roxas City, Capiz, Philippines", 2)]);
-  row([{ col: 0, value: "", style: 2 }, { col: 1, value: "Form Name:", style: 1 }, ...fill(2, 4, "GRADING SHEETS", 3), ...fill(5, columnCount - 1, "Effectivity: October 1, 2025", 2)]);
-  row([{ col: 0, value: "", style: 2 }, { col: 1, value: "Form No:", style: 1 }, { col: 2, value: "FCU-EOMS-RO-006-F", style: 1 }, ...fill(3, 5, "EDUCATIONAL ORGANIZATION MANAGEMENT SYSTEM", 2), ...fill(6, columnCount - 1, "Issuing Office: REGISTRAR'S OFFICE", 2)]);
-  row([{ col: 0, value: "", style: 2 }, { col: 1, value: "Revision No. 1", style: 1 }, ...fill(3, 5, "ISO 21001:2025", 2), ...fill(6, columnCount - 2, "Page No.", 1), { col: columnCount - 1, value: 1, style: 1 }]);
-  row(fill(1, columnCount - 1, "Member: Association of Christian Schools, Colleges and Universities–Accrediting Council, Inc. (ACSCU-ACI)", 3));
-  row(fill(1, columnCount - 1, "Member: Association of Christian Schools, Colleges in Asia (ACUCA)", 3));
+  row([...fill(1, 2, "Form Name:", 1), ...fill(3, rightStart - 1, "GRADING SHEETS", 3), ...fill(rightStart, columnCount - 1, "Effectivity: October 1, 2025", 2)]);
+  row([...fill(1, 2, "Form No: FCU-EOMS-RO-006-F", 1), ...fill(3, rightStart - 1, "EDUCATIONAL ORGANIZATION MANAGEMENT SYSTEM  ISO 21001:2025", 2), ...fill(rightStart, columnCount - 1, "Issuing Office: REGISTRAR'S OFFICE", 2)]);
+  row([...fill(1, 2, "Revision No. 1", 1), ...fill(rightStart, columnCount - 2, "Page No.", 1), { col: columnCount - 1, value: 1, style: 1 }]);
+  row(fill(0, columnCount - 1, "Member: Association of Christian Schools, Colleges and Universities-Accrediting Council, Inc. (ACSCU-ACI)", 3));
+  row(fill(0, columnCount - 1, "Member: Association of Christian Schools, Colleges in Asia (ACUCA)", 3));
   row([]);
-  row([{ col: 1, value: "Course No.", style: 1 }, { col: 2, value: detail.code, style: 2 }, { col: 3, value: "Descriptive Title", style: 1 }, ...fill(4, columnCount - 1, detail.title, 2)]);
-  row([{ col: 1, value: "Class I.D.", style: 1 }, { col: 2, value: detail.classId || "—", style: 2 }, { col: 3, value: "Semester", style: 1 }, { col: 4, value: detail.term, style: 2 }, { col: 5, value: "Academic Year", style: 1 }, ...fill(6, columnCount - 1, detail.academicYear, 2)]);
+  row([{ col: 0, value: "Course No.", style: 1 }, { col: 1, value: detail.code, style: 2 }, ...fill(2, 3, "Descriptive Title", 1), ...fill(4, columnCount - 1, detail.title, 2)]);
+  row([{ col: 0, value: "Class I.D.", style: 1 }, { col: 1, value: detail.classId || "—", style: 2 }, { col: 2, value: "Semester", style: 1 }, ...fill(3, 4, detail.term, 2), { col: 5, value: "Academic Year", style: 1 }, ...fill(6, columnCount - 1, detail.academicYear, 2)]);
   row([]);
-  const tableHeaders = ["NAME OF STUDENTS", ...categories.map(category => `${category.name.toUpperCase()}\n${effectiveCategoryWeight(category, detail.categories).toFixed(0)}%`), "TG", "FG", "REMARKS"];
-  row(tableHeaders.map((value, col) => ({ col, value, style: 4 })), tableHeaders.length);
-  for (const [index, enrollment] of detail.enrollments.entries()) {
+  row([
+    { col: 0, value: "NO.", style: 4 },
+    { col: 1, value: "NAME OF STUDENTS", style: 4 },
+    ...ranges.map(range => ({ col: range.start, value: range.category.name.toUpperCase() + " " + effectiveCategoryWeight(range.category, detail.categories).toFixed(0) + "%", style: 4 })),
+    { col: totalCol, value: "TG", style: 4 },
+    { col: totalCol + 1, value: "FG", style: 4 },
+    { col: totalCol + 2, value: "REMARKS", style: 4 }
+  ]);
+  for (const enrollment of detail.enrollments) {
     const band = detail.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent).find(item => enrollment.finalPercent !== null && enrollment.finalPercent >= item.minPercent);
     const suppress = ["INC", "DROPPED"].includes(enrollment.remarks || "");
-    const categoryValues = categories.map(category => {
-      const percent = weightedCategoryPercent(enrollment, category, detail.categories, detail.assessments);
-      return suppress || percent === null ? "" : Number((percent * effectiveCategoryWeight(category, detail.categories) / 100).toFixed(2));
+    const componentCells = ranges.map(range => {
+      const percentage = weightedCategoryPercent(enrollment, range.category, detail.categories, detail.assessments);
+      return { col: range.start, value: suppress || percentage === null ? "" : Number((percentage * effectiveCategoryWeight(range.category, detail.categories) / 100).toFixed(2)), style: 5 };
     });
-    const values = [`${index + 1}. ${enrollment.studentName.toLocaleUpperCase()}`, ...categoryValues, suppress || enrollment.finalPercent === null ? "" : enrollment.finalPercent, suppress ? "" : enrollment.finalGradeOverride || band?.finalGrade || "", enrollment.remarks || band?.remarks || ""];
-    row(values.map((value, col) => ({ col, value, style: 5 })), values.length);
+    row([
+      { col: 0, value: enrollment.studentNumber || "", style: 5 },
+      { col: 1, value: enrollment.studentName.toLocaleUpperCase(), style: 5 },
+      ...componentCells,
+      { col: totalCol, value: suppress || enrollment.finalPercent === null ? "" : Number(enrollment.finalPercent.toFixed(2)), style: 5 },
+      { col: totalCol + 1, value: suppress ? "" : enrollment.finalGradeOverride || band?.finalGrade || "", style: 5 },
+      { col: totalCol + 2, value: enrollment.remarks || band?.remarks || "", style: 5 }
+    ]);
   }
   const xmlRows = cells.map((values, rowIndex) => {
     const rowNumber = rowIndex + 1;
@@ -252,11 +276,48 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
     const height = rowIndex === 0 ? ' ht="26" customHeight="1"' : rowIndex === 11 ? ' ht="42" customHeight="1"' : "";
     return `<row r="${rowNumber}"${height}>${xmlCells}</row>`;
   }).join("");
-  const merges = [`A1:A5`,`B1:${last}1`,`B2:${last}2`,`C3:E3`,`F3:${last}3`,`D4:F4`,`G4:${last}4`,`D5:F5`,`G5:${excelColumn(columnCount - 2)}5`,`B6:${last}6`,`B7:${last}7`,`E9:${last}9`,`G10:${last}10`];
-  const mergeXml = merges.map(range => `<mergeCell ref="${range}"/>`).join("");
-  const widths = `<cols><col min="1" max="1" width="38" customWidth="1"/><col min="2" max="${columnCount}" width="14" customWidth="1"/></cols>`;
-  const worksheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"${logoPng ? ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"' : ""}><sheetViews><sheetView workbookViewId="0"><pane ySplit="12" topLeftCell="A13" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="18"/>${widths}<sheetData>${xmlRows}</sheetData><mergeCells count="${merges.length}">${mergeXml}</mergeCells><pageMargins left="0.25" right="0.25" top="0.4" bottom="0.4" header="0.2" footer="0.2"/><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/>${logoPng ? '<drawing r:id="rId1"/>' : ""}</worksheet>`;
-  const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="3"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font><font><b/><sz val="15"/><name val="Arial"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color auto="1"/></left><right style="thin"><color auto="1"/></right><top style="thin"><color auto="1"/></top><bottom style="thin"><color auto="1"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="6"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1"/><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/><xf numFmtId="0" fontId="2" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1"/><xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+  const middleEnd = excelColumn(rightStart - 1);
+  const rightFirst = excelColumn(rightStart);
+  const merges = [
+    "A1:A5", "B1:" + last + "1", "B2:" + last + "2",
+    "B3:C3", "D3:" + middleEnd + "3", rightFirst + "3:" + last + "3",
+    "B4:C4", "D4:" + middleEnd + "5", rightFirst + "4:" + last + "4",
+    "B5:C5", rightFirst + "5:" + excelColumn(columnCount - 2) + "5",
+    "A6:" + last + "6", "A7:" + last + "7",
+    "C9:D9", "E9:" + last + "9", "D10:E10", "G10:" + last + "10",
+    ...ranges.flatMap(range => range.start === range.end ? [] : [
+      excelColumn(range.start) + "12:" + excelColumn(range.end) + "12",
+      ...detail.enrollments.map((_, index) =>
+        excelColumn(range.start) + (index + 13) + ":" + excelColumn(range.end) + (index + 13))
+    ])
+  ];
+  const mergeXml = merges.map(range => '<mergeCell ref="' + range + '"/>').join("");
+  const widths = '<cols><col min="1" max="1" width="22" customWidth="1"/><col min="2" max="2" width="42" customWidth="1"/>' +
+    '<col min="3" max="' + totalCol + '" width="10.5" customWidth="1"/>' +
+    '<col min="' + (totalCol + 1) + '" max="' + (totalCol + 2) + '" width="12" customWidth="1"/>' +
+    '<col min="' + (totalCol + 3) + '" max="' + columnCount + '" width="20" customWidth="1"/></cols>';
+  const worksheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"' +
+    (logoPng ? ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"' : "") +
+    '><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView workbookViewId="0"><pane ySplit="12" topLeftCell="A13" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>' +
+    '<sheetFormatPr defaultRowHeight="18"/>' + widths + '<sheetData>' + xmlRows + '</sheetData>' +
+    '<mergeCells count="' + merges.length + '">' + mergeXml + '</mergeCells>' +
+    '<printOptions horizontalCentered="1"/><pageMargins left="0.25" right="0.25" top="0.25" bottom="0.25" header="0.2" footer="0.2"/>' +
+    '<pageSetup paperSize="5" orientation="portrait" fitToWidth="1" fitToHeight="0"/>' +
+    (logoPng ? '<drawing r:id="rId1"/>' : "") + '</worksheet>';
+  const styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<fonts count="3"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font><font><b/><sz val="15"/><name val="Arial"/></font></fonts>' +
+    '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9E6F5"/><bgColor indexed="64"/></patternFill></fill></fills>' +
+    '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color auto="1"/></left><right style="thin"><color auto="1"/></right><top style="thin"><color auto="1"/></top><bottom style="thin"><color auto="1"/></bottom><diagonal/></border></borders>' +
+    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+    '<cellXfs count="6"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
+    '<xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1"/>' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/>' +
+    '<xf numFmtId="0" fontId="2" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>' +
+    '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
   const safeSheetName = sheetName.replace(/[\\/?*\[\]:]/g, " ").slice(0, 31) || "FCU Grades";
   const files = [
     { name: "[Content_Types].xml", content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>${logoPng ? '<Default Extension="png" ContentType="image/png"/><Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>' : ""}<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>` },
@@ -1131,7 +1192,40 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
         </>}
       </section>}
       </div></main>
-          {printMode && detail && user.school.slug === "fcu" && <article className="print-grade-sheet"><table className="print-form-header"><tbody><tr><td rowSpan={5} className="print-seal">{schoolLogoPath ? <img src={`/api/media?pathname=${encodeURIComponent(schoolLogoPath)}`} alt={`${user.school.name} logo`}/> : "FCU"}</td><td colSpan={3} className="print-university"><b>FILAMER CHRISTIAN UNIVERSITY, INC.</b></td><td rowSpan={2}>Effectivity:<br/>October 1, 2025</td></tr><tr><td colSpan={3} className="print-university">Roxas Avenue, Roxas City, Capiz, Philippines</td></tr><tr><td>Form Name:</td><td colSpan={3} className="text-center"><b>GRADING SHEETS</b></td></tr><tr><td>Form No:</td><td><b>FCU-EOMS-RO-006-F</b></td><td><b>EDUCATIONAL ORGANIZATION MANAGEMENT SYSTEM</b></td><td>Issuing Office:<br/>REGISTRAR’S OFFICE</td></tr><tr><td>Revision No. 1</td><td></td><td><b>ISO 21001:2025</b></td><td>Page No. 1</td></tr></tbody></table><div className="print-membership"><b>Member: Association of Christian Schools, Colleges and Universities–Accrediting Council, Inc. (ACSCU-ACI)<br/>Member: Association of Christian Schools, Colleges in Asia (ACUCA)</b></div><div className="print-course-details fcu-print-course-details"><div className="fcu-print-course-row"><span>Course No. <u>{detail.code}</u></span><span>Descriptive Title <u>{detail.title}</u></span></div><div className="fcu-print-course-row three-columns"><span>Class I.D. <u>{detail.classId || "—"}</u></span><span>Semester <u>{detail.term}</u></span><span>Academic Year <u>{detail.academicYear}</u></span></div></div><table className="print-grade-table"><thead><tr><th>NAME OF STUDENTS</th>{printCategories.map(category=><th key={category.id}>{category.name.toUpperCase()}<small>{effectiveCategoryWeight(category,detail.categories).toFixed(0)}%</small></th>)}<th>TG</th><th>FG</th><th>REMARKS</th></tr></thead><tbody>{detail.enrollments.map((en,index)=>{const band=detail.gradeBands.slice().sort((a,b)=>b.minPercent-a.minPercent).find(item=>en.finalPercent!==null&&en.finalPercent>=item.minPercent);const remark=en.remarks||band?.remarks||"";const suppress=["INC","DROPPED"].includes(en.remarks||"");return <tr key={en.id}><td>{index+1}. {en.studentName.toLocaleUpperCase()}</td>{printCategories.map(category=>{const percentage=weightedCategoryPercent(en,category,detail.categories,detail.assessments);return <td key={category.id}>{printMode==="grades"&&!suppress&&percentage!==null?(percentage*effectiveCategoryWeight(category,detail.categories)/100).toFixed(2):""}</td>})}<td>{printMode==="grades"&&!suppress&&en.finalPercent!==null?en.finalPercent.toFixed(2):""}</td><td>{printMode==="grades"&&!suppress?(band?.finalGrade||""):""}</td><td>{printMode==="grades"?remark:""}</td></tr>})}</tbody></table><div className="print-signatures"><div>Submitted by:<p><u>{user.fullName.toLocaleUpperCase()}</u><small>TEACHER’S SIGNATURE OVER PRINTED NAME</small></p></div><div>Noted:<p><u>&nbsp;</u><small>DEAN’S SIGNATURE OVER PRINTED NAME</small></p></div></div></article>}
+          {printMode && detail && user.school.slug === "fcu" && <article className="print-grade-sheet fcu-print-sheet">
+        <table className="print-form-header fcu-form-header"><tbody>
+          <tr><td rowSpan={5} className="print-seal">{schoolLogoPath ? <img src={"/api/media?pathname=" + encodeURIComponent(schoolLogoPath)} alt="FCU seal"/> : "FCU"}</td><td colSpan={10} className="print-university"><b>FILAMER CHRISTIAN UNIVERSITY, INC.</b></td></tr>
+          <tr><td colSpan={10} className="print-university">Roxas Avenue, Roxas City, Capiz, Philippines</td></tr>
+          <tr><td colSpan={2}>Form Name:</td><td colSpan={5} className="text-center"><b>GRADING SHEETS</b></td><td colSpan={3}>Effectivity: October 1, 2025</td></tr>
+          <tr><td colSpan={2}><b>Form No: FCU-EOMS-RO-006-F</b></td><td colSpan={5} rowSpan={2} className="text-center fcu-certification"><b>EDUCATIONAL ORGANIZATION<br/>MANAGEMENT SYSTEM<br/>ISO 21001:2025</b></td><td colSpan={3}>Issuing Office:<br/>REGISTRAR&apos;S OFFICE</td></tr>
+          <tr><td colSpan={2}>Revision No. 1</td><td colSpan={3}>Page No. 1</td></tr>
+        </tbody></table>
+        <div className="print-membership"><b>Member: Association of Christian Schools, Colleges and Universities-Accrediting Council, Inc. (ACSCU-ACI)<br/>Member: Association of Christian Schools, Colleges in Asia (ACUCA)</b></div>
+        <table className="fcu-print-course-table"><tbody>
+          <tr><th>Course No.</th><td>{detail.code}</td><th colSpan={2}>Descriptive Title</th><td colSpan={2}>{detail.title}</td></tr>
+          <tr><th>Class I.D.</th><td>{detail.classId || "—"}</td><th>Semester</th><td>{detail.term}</td><th>Academic Year</th><td>{detail.academicYear}</td></tr>
+        </tbody></table>
+        <table className="print-grade-table fcu-print-grade-table"><thead><tr>
+          <th className="fcu-print-id">NO.</th><th className="fcu-print-name">NAME OF STUDENTS</th>
+          {printCategories.map(category=><th key={category.id}>{category.name.toUpperCase()}<small>{effectiveCategoryWeight(category,detail.categories).toFixed(0)}%</small></th>)}
+          <th>TG</th><th>FG</th><th>REMARKS</th>
+        </tr></thead><tbody>{detail.enrollments.map(en=>{
+          const band=detail.gradeBands.slice().sort((a,b)=>b.minPercent-a.minPercent).find(item=>en.finalPercent!==null&&en.finalPercent>=item.minPercent);
+          const remark=en.remarks||band?.remarks||"";
+          const suppress=["INC","DROPPED"].includes(en.remarks||"");
+          return <tr key={en.id}>
+            <td>{en.studentNumber||""}</td><td>{en.studentName.toLocaleUpperCase()}</td>
+            {printCategories.map(category=>{
+              const percentage=weightedCategoryPercent(en,category,detail.categories,detail.assessments);
+              return <td key={category.id}>{printMode==="grades"&&!suppress&&percentage!==null?(percentage*effectiveCategoryWeight(category,detail.categories)/100).toFixed(2):""}</td>;
+            })}
+            <td>{printMode==="grades"&&!suppress&&en.finalPercent!==null?en.finalPercent.toFixed(2):""}</td>
+            <td>{printMode==="grades"&&!suppress?(en.finalGradeOverride||band?.finalGrade||""):""}</td>
+            <td>{printMode==="grades"?remark:""}</td>
+          </tr>;
+        })}</tbody></table>
+        <div className="print-signatures"><div>Submitted by:<p><u>{user.fullName.toLocaleUpperCase()}</u><small>TEACHER&apos;S SIGNATURE OVER PRINTED NAME</small></p></div><div>Noted:<p><u>&nbsp;</u><small>DEAN&apos;S SIGNATURE OVER PRINTED NAME</small></p></div></div>
+      </article>}
       {printMode === "grades" && detail && user.school.slug !== "fcu" && <article className="print-grade-sheet generic-print-sheet"><header>{schoolLogoPath && <img className="print-school-logo" src={`/api/media?pathname=${encodeURIComponent(schoolLogoPath)}`} alt={`${user.school.name} logo`}/>}<h2>{user.school.name}</h2><b>CLASS GRADING SHEET</b></header><div className="print-course-details"><span>Class ID <u>{detail.classId || "—"}</u></span><span>Course Code <u>{detail.code}</u></span><span>Description <u>{detail.title}</u></span><span>Term <u>{detail.term}</u></span><span>School Year <u>{detail.academicYear}</u></span><span>Class <u>{detail.courseYear || "—"}</u></span><span>Teacher <u>{user.fullName}</u></span></div><table className="print-grade-table"><thead><tr><th>STUDENT</th>{printCategories.map(category=><th key={category.id}>{category.name}<small>{effectiveCategoryWeight(category,detail.categories).toFixed(2)}%</small></th>)}<th>TOTAL</th><th>FINAL</th><th>REMARKS</th></tr></thead><tbody>{detail.enrollments.map((enrollment,index)=>{const band=detail.gradeBands.slice().sort((a,b)=>b.minPercent-a.minPercent).find(item=>enrollment.finalPercent!==null&&enrollment.finalPercent>=item.minPercent);const suppress=["INC","DROPPED"].includes(enrollment.remarks||"");return <tr key={enrollment.id}><td>{index+1}. {enrollment.studentName}</td>{printCategories.map(category=>{const value=weightedCategoryPercent(enrollment,category,detail.categories,detail.assessments);return <td key={category.id}>{!suppress&&value!==null?(value*effectiveCategoryWeight(category,detail.categories)/100).toFixed(2):""}</td>})}<td>{!suppress&&enrollment.finalPercent!==null?enrollment.finalPercent.toFixed(2):""}</td><td>{!suppress?enrollment.finalGradeOverride||band?.finalGrade||"":""}</td><td>{enrollment.remarks||band?.remarks||""}</td></tr>})}</tbody></table><div className="print-signatures"><div>Submitted by:<p><u>{user.fullName}</u><small>TEACHER</small></p></div><div>Reviewed by:<p><u>&nbsp;</u><small>AUTHORIZED REVIEWER</small></p></div></div></article>}
       {teacher && visibilityManagerQuery !== null && <GradeVisibilityManager subjects={subjects} initialQuery={visibilityManagerQuery} onClose={() => setVisibilityManagerQuery(null)} onChanged={(subjectIds, visible) => { const ids = new Set(subjectIds); setSubjects(current => current.map(subject => ids.has(subject.id) ? { ...subject, isPublished: visible } : subject)); setDetail(current => current && ids.has(current.id) ? { ...current, isPublished: visible } : current); }} />}
        {rosterEdit && detail && <div className="modal-backdrop-custom" onMouseDown={e=>{if(e.target===e.currentTarget)setRosterEdit(null)}}><div className="modal-card"><button className="modal-x" onClick={()=>setRosterEdit(null)}>×</button><span className="eyebrow">CLASS ROSTER</span><h2>Edit student details</h2><p className="muted">Update the name or class student ID. Changing the ID unlinks the previous portal account.</p><form onSubmit={saveRosterStudent}><label className="form-label">Student name</label><input className="form-control mb-3" value={rosterEdit.studentName} onChange={e=>setRosterEdit({...rosterEdit,studentName:e.target.value})} required maxLength={120}/><label className="form-label">Student ID</label><input className="form-control mb-3" value={rosterEdit.studentNumber} onChange={e=>setRosterEdit({...rosterEdit,studentNumber:e.target.value})} maxLength={40}/><button className="btn btn-primary w-100" disabled={busy}>Save student details</button></form></div></div>}

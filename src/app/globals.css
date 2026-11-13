@@ -1098,3 +1098,34 @@
 @media print {
   .portal-layout .scorebook-fitbar {display:none!important;}
 }
+
+
+/* FCU-only FCU-EOMS-RO-006-F official grading sheet: match Excel columns and print hierarchy. */
+@media print {
+  .fcu-print-sheet { font-size: 7.5pt !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .fcu-print-sheet .fcu-form-header { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 7.2pt; }
+  .fcu-print-sheet .fcu-form-header td { border: 1px solid #555; padding: 3px 4px; vertical-align: middle; overflow-wrap: anywhere; }
+  .fcu-print-sheet .fcu-form-header .print-seal { width: 16%; font-size: 12pt; }
+  .fcu-print-sheet .fcu-form-header .print-seal img { max-width: 90%; max-height: 1.18in; object-fit: contain; }
+  .fcu-print-sheet .fcu-form-header .print-university { text-align: center; height: 19px; }
+  .fcu-print-sheet .fcu-form-header .print-university b { font-size: 10pt; }
+  .fcu-print-sheet .fcu-certification { font-size: 7.4pt; line-height: 1.25; }
+  .fcu-print-sheet .print-membership { margin: 3px 0 11px; text-align: center; line-height: 1.4; }
+  .fcu-print-sheet .fcu-print-course-table { width: 100%; border-collapse: collapse; margin: 2px 0 10px; font-size: 8pt; }
+  .fcu-print-sheet .fcu-print-course-table th,
+  .fcu-print-sheet .fcu-print-course-table td { padding: 2px 5px 2px 2px; border: 0; text-align: left; vertical-align: top; }
+  .fcu-print-sheet .fcu-print-course-table th { width: 12%; font-weight: 700; white-space: nowrap; }
+  .fcu-print-sheet .fcu-print-course-table td { font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+  .fcu-print-sheet .fcu-print-grade-table { font-size: 7pt; width: 100%; table-layout: fixed; border-collapse: collapse; }
+  .fcu-print-sheet .fcu-print-grade-table th,
+  .fcu-print-sheet .fcu-print-grade-table td { border: 1px solid #b1b6bd; padding: 3px 3px; }
+  .fcu-print-sheet .fcu-print-grade-table th { background: #d9e6f5 !important; color: #111 !important; font-weight: 700; border-color: #b1b6bd; font-size: 6.8pt; overflow-wrap: anywhere; }
+  .fcu-print-sheet .fcu-print-grade-table th small { display: block; color: #111; font-weight: 600; font-size: 6.2pt; }
+  .fcu-print-sheet .fcu-print-grade-table th:first-child,
+  .fcu-print-sheet .fcu-print-grade-table td:first-child { width: 17%; text-align: left; }
+  .fcu-print-sheet .fcu-print-grade-table th:nth-child(2),
+  .fcu-print-sheet .fcu-print-grade-table td:nth-child(2) { width: 30%; text-align: left; }
+  .fcu-print-sheet .fcu-print-grade-table td { text-align: center; overflow-wrap: anywhere; }
+  .fcu-print-sheet .fcu-print-grade-table tbody tr { break-inside: avoid; }
+  .fcu-print-sheet .print-signatures { break-inside: avoid; }
+}
