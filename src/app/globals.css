@@ -1166,3 +1166,12 @@
   .fcu-print-sheet .fcu-print-grade-table tbody tr { height: 14pt !important; }
   .fcu-print-sheet .fcu-print-grade-table td { padding-top: 1px !important; padding-bottom: 1px !important; }
 }
+
+/* Keep the "Upcoming work" section compact when all pending work is done.
+   Never stretch a completed card to match the height of its neighbor. */
+.overview-upcoming-grid{align-items:start}
+.overview-upcoming-card-complete{min-height:0!important}
+.overview-upcoming-card-complete .today-attendance-shortcuts{margin-top:10px;padding:10px 12px}
+.overview-upcoming-compact{margin-top:12px;padding:9px 10px;border-radius:8px;background:#f1f7f5;color:#41695b;font-size:.7rem;line-height:1.45}
+.portal-layout[data-bs-theme="dark"] .overview-upcoming-compact{background:#203a36;color:#bbdfd2}
+@media(max-width:760px){.overview-upcoming-card-complete{padding:14px 16px!important}}
