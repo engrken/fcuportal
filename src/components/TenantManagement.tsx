@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { csvCell, daysUntil, tenantHealth, todayManila } from "@/lib/tenant-operations";
 
 type Payment = {
   id: string; amount: number; method: string; reference: string | null;
@@ -28,35 +29,6 @@ const planLabel = (plan: Plan) => plan === "FREE" ? "Freemium" : plan === "PREMI
 const money = (amount: number) => new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 2 }).format(amount);
 const dateLabel = (value: string | null | undefined) => value ? new Date(value).toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric", timeZone: "Asia/Manila" }) : "Not set";
 
-function todayManila(): string {
-  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
-  const part = (type: string) => parts.find(value => value.type === type)?.value ?? "00";
-  return `${part("year")}-${part("month")}-${part("day")}`;
-}
-function daysUntil(date: string | null): number | null {
-  if (!date) return null;
-  const expiry = Date.parse(date.slice(0, 10) + "T00:00:00Z");
-  const today = Date.parse(todayManila() + "T00:00:00Z");
-  return Number.isFinite(expiry) ? Math.round((expiry - today) / 86400000) : null;
-}
-function tenantHealth(tenant: Tenant) {
-  if (!tenant.isActive || tenant.subscriptionStatus !== "ACTIVE") {
-    return { level: "danger", label: tenant.subscriptionStatus === "PAST_DUE" ? "Past due · Inactive" : tenant.subscriptionStatus === "ACTIVE" ? "Inactive" : tenant.subscriptionStatus === "SUSPENDED" ? "Suspended" : "Cancelled" };
-  }
-  const remaining = daysUntil(tenant.subscriptionExpiresAt);
-  if (remaining !== null && remaining < 0) return { level: "danger", label: "Expiry date passed" };
-  if (remaining !== null && remaining <= 30) return { level: "warning", label: remaining === 0 ? "Expires today" : `Expires in ${remaining}d` };
-  if (tenant.teacherCount === 0) return { level: "warning", label: "Needs first teacher" };
-  if (tenant.verifiedTeacherCount === 0) return { level: "warning", label: "Verify teacher accounts" };
-  if (tenant.classCount === 0) return { level: "warning", label: "No classes created" };
-  return { level: "good", label: "Operational" };
-}
-
-function csvCell(value: string | number | null | undefined): string {
-  const text = String(value ?? "");
-  const safe = /^[\s]*[=+\-@\t\r]/.test(text) ? "'" + text : text;
-  return '"' + safe.replaceAll('"', '""') + '"';
-}
 function downloadSchoolReport(tenants: Tenant[]) {
   const header = ["School", "Slug", "Plan", "Activation", "Expiry", "Teachers", "Verified teachers", "Student accounts", "Verified students", "Classes", "Visible classes", "Class enrollment seats", "Directory records", "Payments", "Lifetime receipts (PHP)"];
   const rows = tenants.map(t => [
