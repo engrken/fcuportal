@@ -11,10 +11,10 @@ import {
   type StudentSimulationGrade
 } from "@/lib/grade-simulation";
 
-type Props = { grade: StudentSimulationGrade; onClose: () => void };
+type Props = { grade: StudentSimulationGrade; onClose: () => void; inline?: boolean };
 const displayPercent = (value: number | null) => value === null ? "—" : `${value.toFixed(2)}%`;
 
-export default function GradeWhatIfSimulator({ grade, onClose }: Props) {
+export default function GradeWhatIfSimulator({ grade, onClose, inline = false }: Props) {
   const [scenario, setScenario] = useState<ScoreScenario>({});
   const [target, setTarget] = useState("75");
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -35,6 +35,7 @@ export default function GradeWhatIfSimulator({ grade, onClose }: Props) {
   const baselineById = new Map(baseline.items.map(item => [item.categoryId, item]));
 
   useEffect(() => {
+    if (inline) return;
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -59,22 +60,22 @@ export default function GradeWhatIfSimulator({ grade, onClose }: Props) {
     };
     // The modal is mounted once when opened. onClose does not need to retrigger focus management.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [inline]);
 
   function setScore(id: string, value: string) {
     setScenario(previous => ({ ...previous, [id]: value }));
   }
 
-  return <div className="modal-backdrop-custom grade-simulator-backdrop" onMouseDown={event => {
-    if (event.target === event.currentTarget) onClose();
+  return <div className={inline ? "grade-simulator-inline" : "modal-backdrop-custom grade-simulator-backdrop"} onMouseDown={event => {
+    if (!inline && event.target === event.currentTarget) onClose();
   }}>
-    <div className="modal-card grade-simulator-dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="grade-simulator-heading" aria-describedby="grade-simulator-description">
+    <div className={inline ? "grade-simulator-dialog grade-simulator-embedded" : "modal-card grade-simulator-dialog"} ref={dialogRef} role={inline ? "region" : "dialog"} aria-modal={inline ? undefined : true} aria-labelledby="grade-simulator-heading" aria-describedby="grade-simulator-description">
       <header className="grade-simulator-heading">
         <div><small className="eyebrow">STUDENT TOOLS · PRIVATE PRACTICE</small>
           <h2 id="grade-simulator-heading">What-If Grade Simulator</h2>
           <p id="grade-simulator-description">{grade.code} — {grade.title}</p>
         </div>
-        <button ref={closeRef} type="button" className="grade-simulator-close" onClick={onClose} aria-label="Close grade simulator">×</button>
+        <button ref={closeRef} type="button" className="grade-simulator-close" onClick={onClose} aria-label={inline ? "Back to class selection" : "Close grade simulator"}>{inline ? "←" : "×"}</button>
       </header>
       <div className="grade-simulator-body">
         <div className="grade-simulator-notice"><strong>Simulation only.</strong> Try hypothetical scores to explore possible outcomes. Nothing entered here is saved or sent to your teacher. Actual grades, verification, and official school records remain unchanged.</div>
@@ -139,7 +140,7 @@ export default function GradeWhatIfSimulator({ grade, onClose }: Props) {
         })}</div> : <div className="grade-simulator-empty">Your teacher has not configured assessment categories yet.</div>}
         <p className="grade-simulator-disclaimer">This is a weighted calculation using only teacher-created assessments visible in SAGA. Blank, not-yet-recorded assessments are excluded until a hypothetical score is entered, so early results may not predict the final course grade. Custom grade changes and future uncreated assessments are not modeled. Official grades are published only through the school's official student portal.</p>
       </div>
-      <footer className="grade-simulator-footer"><span>Only you can see this temporary scenario.</span><button type="button" className="btn btn-primary" onClick={onClose}>Close simulator</button></footer>
+      <footer className="grade-simulator-footer"><span>Only you can see this temporary scenario.</span><button type="button" className="btn btn-primary" onClick={onClose}>{inline ? "Back to class selection" : "Close simulator"}</button></footer>
     </div>
   </div>;
 }
