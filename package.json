@@ -8,7 +8,8 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate status; fi && prisma generate && next build",
+    "build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate status; fi && prisma generate && npm run test:grades && next build",
+    "test:grades": "node --test tests/grades.test.cjs",
     "postinstall": "prisma generate",
     "start": "next start",
     "db:push": "prisma db push",

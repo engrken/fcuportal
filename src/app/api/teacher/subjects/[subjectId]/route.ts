@@ -19,7 +19,7 @@ export async function GET(_request: Request, context: Context) {
   const teacher = await requireRole("TEACHER"); if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { subjectId } = await context.params; const subject = await ownedSubject(subjectId, teacher.id, teacher.schoolId);
   if (!subject) return NextResponse.json({ error: "Subject not found" }, { status: 404 });
-  const details = subject.enrollments.map(enrollment => ({ ...enrollment, finalPercent: calculateFinal(subject.categories.map(category => ({ id: category.id, parentId: category.parentId, weight: category.weight, conversionBase: category.conversionBase, assessments: subject.assessments.filter(a => a.categoryId === category.id).map(a => ({ maxScore: a.maxScore, weight: a.weight, scores: enrollment.scores.filter(s => s.assessmentId === a.id) })) }))) }));
+  const details = subject.enrollments.map(enrollment => ({ ...enrollment, finalPercent: calculateFinal(subject.categories.map(category => ({ id: category.id, parentId: category.parentId, weight: category.weight, conversionBase: category.conversionBase, assessments: subject.assessments.filter(a => a.categoryId === category.id).map(a => ({ title: a.title, maxScore: a.maxScore, weight: a.weight, scores: enrollment.scores.filter(s => s.assessmentId === a.id) })) }))) }));
   return NextResponse.json({ subject: { ...subject, enrollments: details } });
 }
 
@@ -62,7 +62,7 @@ export async function PATCH(request: Request, context: Context) {
     const allowedGrades = new Set(["AUTO", ...subject.gradeBands.map(band => band.finalGrade)]);
     const allowedRemarks = new Set(["AUTO", "Passed", "Failed", "INC", "NP", "DROPPED"]);
     if (!allowedGrades.has(change.finalGrade) || !allowedRemarks.has(change.remarks)) return NextResponse.json({ error: "Choose a grade and remark from this class's grading scale." }, { status: 400 });
-    const calculatedPercent = calculateFinal(subject.categories.map(category => ({ id: category.id, parentId: category.parentId, weight: category.weight, conversionBase: category.conversionBase, assessments: subject.assessments.filter(item => item.categoryId === category.id).map(item => ({ maxScore: item.maxScore, weight: item.weight, scores: enrollment.scores.filter(score => score.assessmentId === item.id) })) })));
+    const calculatedPercent = calculateFinal(subject.categories.map(category => ({ id: category.id, parentId: category.parentId, weight: category.weight, conversionBase: category.conversionBase, assessments: subject.assessments.filter(item => item.categoryId === category.id).map(item => ({ title: item.title, maxScore: item.maxScore, weight: item.weight, scores: enrollment.scores.filter(score => score.assessmentId === item.id) })) })));
     const automatic = equivalentFromBands(calculatedPercent, subject.gradeBands);
     const previousFinalGrade = enrollment.finalGradeOverride ?? automatic.finalGrade;
     const previousRemarks = enrollment.remarks ?? automatic.remarks;

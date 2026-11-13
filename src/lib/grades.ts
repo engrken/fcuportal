@@ -47,63 +47,116 @@ export type GradeCalculationCategory = {
   parentId?: string | null;
   weight: number;
   conversionBase?: number;
-  assessments: Array<{ maxScore: number; weight?: number | null; scores: Array<{ points: number | null; remark?: string | null }> }>;
+  assessments: Array<{
+    title?: string;
+    maxScore: number;
+    weight?: number | null;
+    scores: Array<{ points: number | null; remark?: string | null }>;
+  }>;
 };
 
-export function convertRawPercent(rawPercent: number, conversionBase = 50) {
-  const base = Math.min(100, Math.max(1, conversionBase));
-  return Math.round((rawPercent * base / 100 + (100 - base)) * 100) / 100;
-}
+export type GradeContribution = {
+  categoryId: string;
+  percent: number | null;
+  courseWeight: number;
+  earnedCourse: number | null;
+  withinRootWeight: number;
+  earnedWithinRoot: number | null;
+  recordedItems: number;
+  pendingItems: number;
+  excusedItems: number;
+};
 
+const roundPercent = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+const isRecorded = (assessment: GradeCalculationCategory["assessments"][number]) => {
+  const score = assessment.scores[0];
+  return !!score && (score.points !== null || (!!score.remark && score.remark !== "EXCUSED"));
+};
+
+const isAttendanceItem = (title?: string) => !!title && title.toLocaleLowerCase().startsWith("attendance ·");
+
+/**
+ * A blank score is pending (not a zero). ABSENT/DID_NOT_SUBMIT are recorded
+ * zeros, while EXCUSED is omitted from the denominator. Category percentages
+ * are based on recorded assessments until the class record is complete.
+ *
+ * Attendance must use an actual present/absent ratio, not the academic
+ * grade-transmutation base used for quizzes and examinations.
+ */
 export function calculateCategoryPercent(category: Pick<GradeCalculationCategory, "conversionBase" | "assessments">) {
-  // Transmute the raw percent using the selected grading base. For example,
-  // base 70 follows raw% × 70% + 30%; a raw score of 70% becomes 79%.
-  const transmute = (rawPercent: number) => convertRawPercent(rawPercent, category.conversionBase ?? 50);
-  const active = category.assessments.filter(assessment => assessment.scores[0]?.remark !== "EXCUSED");
+  const active = category.assessments.filter(assessment =>
+    assessment.scores[0]?.remark !== "EXCUSED" && isRecorded(assessment)
+  );
   if (!active.length) return null;
+  const isAttendance = category.assessments.length > 0 && category.assessments.every(item => isAttendanceItem(item.title));
+  const base = isAttendance ? 100 : category.conversionBase ?? 50;
+  const transmute = (rawPercent: number) => convertRawPercent(rawPercent, base);
+  const rawPoints = (assessment: GradeCalculationCategory["assessments"][number]) => {
+    const score = assessment.scores[0];
+    return score?.remark === "PRESENT" ? assessment.maxScore :
+      score?.remark === "ABSENT" || score?.remark === "DID_NOT_SUBMIT" ? 0 : score?.points ?? 0;
+  };
   if (category.assessments.some(assessment => assessment.weight !== null && assessment.weight !== undefined)) {
     const totalWeight = active.reduce((sum, assessment) => sum + (assessment.weight ?? 0), 0);
     if (!totalWeight) return null;
-    const weighted = active.reduce((sum, assessment) => {
-      const score = assessment.scores[0];
-      const points = score?.remark === "PRESENT" ? assessment.maxScore : score?.remark === "ABSENT" ? 0 : score?.points ?? 0;
-      const percent = transmute((points / assessment.maxScore) * 100);
-      return sum + percent * (assessment.weight ?? 0);
-    }, 0);
-    return Math.round(weighted / totalWeight * 100) / 100;
+    const weighted = active.reduce((sum, assessment) => (
+      sum + transmute(rawPoints(assessment) / assessment.maxScore * 100) * (assessment.weight ?? 0)
+    ), 0);
+    return roundPercent(weighted / totalWeight);
   }
   const possible = active.reduce((sum, assessment) => sum + assessment.maxScore, 0);
-  const earned = active.reduce((sum, assessment) => sum + (assessment.scores[0]?.remark === "PRESENT" ? assessment.maxScore : assessment.scores[0]?.remark === "ABSENT" ? 0 : assessment.scores[0]?.points ?? 0), 0);
-  return possible ? Math.round(transmute((earned / possible) * 100) * 100) / 100 : null;
+  const earned = active.reduce((sum, assessment) => sum + rawPoints(assessment), 0);
+  return possible ? roundPercent(transmute(earned / possible * 100)) : null;
+}
+
+/**
+ * The existing SAGA hierarchy uses percentage points on the root group's
+ * 100-point scale: e.g. a 25% Lecture subcategory within Lecture 60% has
+ * a maximum 15 percentage-point course contribution.
+ *
+ * Contributions and the course total both use 2-decimal rounding, so the
+ * displayed category contributions always add up to the displayed total.
+ */
+export function calculateGradeBreakdown(categories: GradeCalculationCategory[]) {
+  const byId = new Map(categories.map(category => [category.id, category]));
+  const withChildren = new Set(categories.filter(category => category.parentId).map(category => category.parentId));
+  const items: GradeContribution[] = [];
+  for (const category of categories) {
+    if (withChildren.has(category.id)) continue;
+    let root = category;
+    const visited = new Set([category.id]);
+    let valid = true;
+    while (root.parentId) {
+      if (visited.has(root.parentId) || !byId.has(root.parentId)) { valid = false; break; }
+      visited.add(root.parentId);
+      root = byId.get(root.parentId)!;
+    }
+    if (!valid) continue;
+    const courseWeight = category.id === root.id ? root.weight : root.weight * category.weight / 100;
+    const withinRootWeight = category.id === root.id ? root.weight : category.weight;
+    const inheritedBase = category.parentId ? byId.get(category.parentId)?.conversionBase : category.conversionBase;
+    const percent = calculateCategoryPercent({ conversionBase: inheritedBase ?? 50, assessments: category.assessments });
+    items.push({
+      categoryId: category.id,
+      percent,
+      courseWeight: roundPercent(courseWeight),
+      earnedCourse: percent === null ? null : roundPercent(percent * courseWeight / 100),
+      withinRootWeight: roundPercent(withinRootWeight),
+      earnedWithinRoot: percent === null ? null : roundPercent(percent * withinRootWeight / 100),
+      recordedItems: category.assessments.filter(isRecorded).length,
+      pendingItems: category.assessments.filter(assessment => assessment.scores[0]?.remark !== "EXCUSED" && !isRecorded(assessment)).length,
+      excusedItems: category.assessments.filter(assessment => assessment.scores[0]?.remark === "EXCUSED").length
+    });
+  }
+  const recorded = items.filter(item => item.earnedCourse !== null);
+  return {
+    items,
+    totalPercent: recorded.length ? roundPercent(recorded.reduce((total, item) => total + (item.earnedCourse ?? 0), 0)) : null
+  };
 }
 
 export function calculateFinal(categories: GradeCalculationCategory[]) {
-  if (!categories.some(category => category.assessments.some(assessment => assessment.scores.some(score => score.points !== null || (!!score.remark && score.remark !== "EXCUSED"))))) return null;
-  const categoriesById = new Map(categories.map(category => [category.id, category] as const));
-  const childrenByParent = new Map<string | null, GradeCalculationCategory[]>();
-  for (const category of categories) {
-    const parentId = category.parentId ?? null;
-    const siblings = childrenByParent.get(parentId) ?? [];
-    siblings.push(category);
-    childrenByParent.set(parentId, siblings);
-  }
-
-  const calculateContribution = (category: GradeCalculationCategory, rootWeight: number, path = new Set<string>()): number | null => {
-    if (path.has(category.id)) return null;
-    const nextPath = new Set(path).add(category.id);
-    const children = childrenByParent.get(category.id) ?? [];
-    if (children.length) {
-      return children.reduce((sum, child) => sum + (calculateContribution(child, rootWeight, nextPath) ?? 0), 0);
-    }
-    if (!category.assessments.length) return 0;
-    const base = category.parentId ? categoriesById.get(category.parentId)?.conversionBase : category.conversionBase;
-    const percent = calculateCategoryPercent({ conversionBase: base ?? 50, assessments: category.assessments });
-    const contributionWeight = category.parentId ? rootWeight * category.weight / 100 : category.weight;
-    return percent === null ? null : percent * contributionWeight / 100;
-  };
-
-  const result = (childrenByParent.get(null) ?? []).reduce((sum, category) => sum + (calculateContribution(category, category.weight) ?? 0), 0);
-  return Math.round(result * 100) / 100;
+  return calculateGradeBreakdown(categories).totalPercent;
 }
 
 export function defaultEquivalent(percent: number | null) {

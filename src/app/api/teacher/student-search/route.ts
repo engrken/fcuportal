@@ -67,6 +67,7 @@ export async function GET(request: Request) {
       weight: category.weight,
       conversionBase: category.conversionBase,
       assessments: subject.assessments.filter(item => item.categoryId === category.id).map(item => ({
+        title: item.title,
         maxScore: item.maxScore,
         weight: item.weight,
         scores: enrollment.scores.filter(score => score.assessmentId === item.id).map(score => ({ points: score.points, remark: score.remark }))

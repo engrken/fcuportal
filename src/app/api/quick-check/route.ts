@@ -61,7 +61,7 @@ export async function POST(request: Request) {
 
   const grades = enrollments.map(enrollment => {
     const { subject } = enrollment;
-    const categories = subject.categories.map(category => ({ id: category.id, parentId: category.parentId, weight: category.weight, conversionBase: category.conversionBase, assessments: category.assessments.map(item => ({ maxScore: item.maxScore, weight: item.weight, scores: item.scores.filter(score => score.enrollmentId === enrollment.id) })) }));
+    const categories = subject.categories.map(category => ({ id: category.id, parentId: category.parentId, weight: category.weight, conversionBase: category.conversionBase, assessments: category.assessments.map(item => ({ title: item.title, maxScore: item.maxScore, weight: item.weight, scores: item.scores.filter(score => score.enrollmentId === enrollment.id) })) }));
     const percent = calculateFinal(categories);
     const equivalent = equivalentFromBands(percent, subject.gradeBands);
     const pathFor = (categoryId: string): string => {
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
       percent, finalGrade: enrollment.finalGradeOverride ?? equivalent.finalGrade, remarks: enrollment.remarks || equivalent.remarks,
       categories: subject.categories.filter(category => !subject.categories.some(child => child.parentId === category.id)).map(category => {
         const base = category.parentId ? subject.categories.find(parent => parent.id === category.parentId)?.conversionBase : category.conversionBase;
-        const gradeCategory = { conversionBase: base ?? 50, assessments: category.assessments.map(item => ({ maxScore: item.maxScore, weight: item.weight, scores: item.scores.filter(score => score.enrollmentId === enrollment.id) })) };
+        const gradeCategory = { conversionBase: base ?? 50, assessments: category.assessments.map(item => ({ title: item.title, maxScore: item.maxScore, weight: item.weight, scores: item.scores.filter(score => score.enrollmentId === enrollment.id) })) };
         let root = category;
         while (root.parentId) { const parent = subject.categories.find(item => item.id === root.parentId); if (!parent) break; root = parent; }
         const weight = category.id === root.id ? root.weight : root.weight * category.weight / 100;

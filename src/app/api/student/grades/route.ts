@@ -36,7 +36,7 @@ export async function GET() {
   });
   const grades = enrollments.map(enrollment => {
     const { subject } = enrollment;
-    const percent = calculateFinal(subject.categories.map(category => ({ id: category.id, parentId: category.parentId, weight: category.weight, conversionBase: category.conversionBase, assessments: category.assessments.map(assessment => ({ maxScore: assessment.maxScore, weight: assessment.weight, scores: assessment.scores })) })));
+    const percent = calculateFinal(subject.categories.map(category => ({ id: category.id, parentId: category.parentId, weight: category.weight, conversionBase: category.conversionBase, assessments: category.assessments.map(assessment => ({ title: assessment.title, maxScore: assessment.maxScore, weight: assessment.weight, scores: assessment.scores })) })));
     const equivalent = equivalentFromBands(percent, enrollment.subject.gradeBands);
     const pathFor = (categoryId: string): string => {
       const names: string[] = []; let current = subject.categories.find(category => category.id === categoryId);
