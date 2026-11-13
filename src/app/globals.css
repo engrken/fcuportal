@@ -1613,6 +1613,16 @@ body.saga-app-body:has(.portal-layout.sidebar-collapsed)>.saga-site-footer{paddi
   color:#c2dcd8;background:#19383a;border-color:#386061;border-left-color:#69cdc1
 }
 
+.portal-layout[data-bs-theme="dark"][data-saga-role="teacher"] .eyebrow,
+.portal-layout[data-bs-theme="dark"][data-saga-role="teacher"] .topbar .crumb{color:#b5d4f8}
+.portal-layout[data-bs-theme="dark"][data-saga-role="student"] .topbar .crumb{color:#a3e1d9}
+.portal-layout[data-bs-theme="dark"][data-saga-role="teacher"] .private-pill{
+  background:#463b28;color:#f1d6a2
+}
+.portal-layout[data-bs-theme="dark"][data-saga-role="student"] .private-pill{
+  background:#23493f;color:#c3e8d4
+}
+
 /* The footer is OUTSIDE the portal component, so its theme follows the body.
    Its colors distinguish each role only subtly and never encode grade outcomes. */
 .saga-site-footer{
