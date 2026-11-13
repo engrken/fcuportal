@@ -1150,3 +1150,19 @@
   .fcu-print-sheet .fcu-print-grade-table tbody tr { break-inside: avoid; }
   .fcu-print-sheet .print-signatures { margin-top: 14px; break-inside: avoid; }
 }
+
+/* Match the ISO workbook’s compact black-and-white course lines and row spacing. */
+@media print {
+  .fcu-print-sheet .fcu-print-official-header { margin: 0 0 8px !important; }
+  .fcu-print-sheet .fcu-print-course-table {
+    border: 0 !important;
+    margin: 0 0 6px !important;
+    border-collapse: collapse;
+    font-size: 9pt !important;
+  }
+  .fcu-print-sheet .fcu-print-course-table tr:first-child td:last-child { border-bottom: 1px solid #222 !important; }
+  .fcu-print-sheet .fcu-print-course-table tr td { padding: 2px 4px !important; }
+  .fcu-print-sheet .fcu-print-grade-table thead { display: table-header-group; }
+  .fcu-print-sheet .fcu-print-grade-table tbody tr { height: 14pt !important; }
+  .fcu-print-sheet .fcu-print-grade-table td { padding-top: 1px !important; padding-bottom: 1px !important; }
+}

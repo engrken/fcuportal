@@ -17,7 +17,7 @@
     "db:studio": "prisma studio",
     "db:migrate": "prisma migrate deploy",
     "test:simulation": "node --test tests/grade-simulation.test.cjs",
-    "test:scorebook-layout": "node --test tests/scorebook-layout.test.cjs"
+    "test:scorebook-layout": "node --test tests/scorebook-layout.test.cjs tests/fcu-grade-format.test.cjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",
