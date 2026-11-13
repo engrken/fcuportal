@@ -1,5 +1,16 @@
 [
   {
+    "version": "0.3.0-beta.1",
+    "date": "2026-11-13",
+    "kind": "feature",
+    "changes": [
+      "The global copyright footer now follows the saved Light/Dark appearance setting on all portal and administration pages.",
+      "Teachers now have a calm navy-and-blue interface with warm highlights; students have a welcoming teal-and-sky palette, each with dark-mode alternatives.",
+      "Improved contrast for navigation, grade-summary cards, controls, and account preferences without changing academic status colors.",
+      "The footer stays aligned with the class sidebar on desktop, adapts to mobile screens, and remains hidden from printed grade reports."
+    ]
+  },
+  {
     "version": "0.2.0-beta.1",
     "date": "2026-11-13",
     "kind": "feature",

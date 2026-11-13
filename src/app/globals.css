@@ -1447,3 +1447,241 @@ body.saga-app-body:has(.portal-layout.sidebar-collapsed)>.saga-site-footer{paddi
   .saga-site-footer{display:none!important}
   body.saga-app-body,body.saga-app-body>.saga-app-content{display:block!important;min-height:0!important}
 }
+
+/* v0.3 theme system: accessible role accents without changing grade semantics.
+   The school logo and branding remain independent of these workspace colors. */
+.portal-layout[data-saga-role="teacher"]{
+  --saga-role-primary:#255991;--saga-role-hover:#194675;
+  --saga-role-surface:#edf3fc;--saga-role-border:#d4e2f2;
+  --saga-role-ink:#244c7b;--saga-role-background:#f4f7fc;
+}
+.portal-layout[data-saga-role="student"]{
+  --saga-role-primary:#086d73;--saga-role-hover:#07545a;
+  --saga-role-surface:#e7f6f2;--saga-role-border:#cbe9e3;
+  --saga-role-ink:#0e6068;--saga-role-background:#f3faf9;
+}
+.portal-layout[data-saga-role] .main-area{background:var(--saga-role-background)}
+.portal-layout[data-saga-role] .topbar{border-bottom:1px solid var(--saga-role-border)}
+.portal-layout[data-saga-role] .side-link.selected{
+  background:var(--saga-role-surface);color:var(--saga-role-primary);
+  box-shadow:inset 3px 0 0 var(--saga-role-primary)
+}
+.portal-layout[data-saga-role] .side-link:hover:not(.selected){background:var(--saga-role-surface)}
+.portal-layout[data-saga-role] .btn-primary{
+  --bs-btn-bg:var(--saga-role-primary);
+  --bs-btn-border-color:var(--saga-role-primary);
+  --bs-btn-hover-bg:var(--saga-role-hover);
+  --bs-btn-hover-border-color:var(--saga-role-hover);
+  --bs-btn-active-bg:var(--saga-role-hover);
+  --bs-btn-active-border-color:var(--saga-role-hover);
+  --bs-btn-disabled-bg:var(--saga-role-primary);
+  --bs-btn-disabled-border-color:var(--saga-role-primary);
+  box-shadow:0 3px 10px rgba(26,72,115,.12)
+}
+.portal-layout[data-saga-role] .btn-outline-primary{
+  --bs-btn-color:var(--saga-role-primary);
+  --bs-btn-border-color:var(--saga-role-primary);
+  --bs-btn-hover-bg:var(--saga-role-primary);
+  --bs-btn-hover-border-color:var(--saga-role-primary);
+  --bs-btn-active-bg:var(--saga-role-hover);
+  --bs-btn-active-border-color:var(--saga-role-hover)
+}
+.portal-layout[data-saga-role] .form-control:focus,
+.portal-layout[data-saga-role] .form-select:focus{
+  border-color:var(--saga-role-primary);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--saga-role-primary) 15%,transparent)
+}
+.portal-layout[data-saga-role] .account-menu-theme-options button.selected{
+  border-color:var(--saga-role-primary);background:var(--saga-role-surface);color:var(--saga-role-ink)
+}
+.portal-layout[data-saga-role] .account-menu-trigger:focus-visible,
+.portal-layout[data-saga-role] .student-itemized summary:focus-visible{
+  outline-color:var(--saga-role-primary)
+}
+/* Teacher: compact, focused navy/blue learning workspace and warm highlights. */
+.portal-layout[data-saga-role="teacher"] .welcome-strip{
+  background:linear-gradient(115deg,#e6effd 0%,#f7f9fe 80%);
+  border-color:#dce8f8;color:#183d67
+}
+.portal-layout[data-saga-role="teacher"] .welcome-strip p{color:#486684}
+.portal-layout[data-saga-role="teacher"] .welcome-strip .eyebrow{color:#466d98}
+.portal-layout[data-saga-role="teacher"] .topbar .crumb{color:#416b9e}
+.portal-layout[data-saga-role="teacher"] .sidebar-brand strong{color:#244d7b}
+.portal-layout[data-saga-role="teacher"] .stat-card{
+  border-color:#e0e9f5;box-shadow:0 4px 18px rgba(28,70,117,.045)
+}
+.portal-layout[data-saga-role="teacher"] .stat-card strong{color:#234c7e}
+.portal-layout[data-saga-role="teacher"] .eyebrow{color:#496e9f}
+.portal-layout[data-saga-role="teacher"] .private-pill{
+  color:#775518;background:#fff4dd
+}
+/* Student: welcoming teal/sky palette for easier reading and reassuring progress. */
+.portal-layout[data-saga-role="student"] .student-overview-hero,
+.portal-layout[data-saga-role="student"] .student-welcome{
+  background:linear-gradient(115deg,#e5f7f4 0%,#eff9fc 75%,#f6faff 100%);
+  border-color:#cfeae5
+}
+.portal-layout[data-saga-role="student"] .student-welcome h2{color:#165e66}
+.portal-layout[data-saga-role="student"] .student-welcome p{color:#456f74}
+.portal-layout[data-saga-role="student"] .student-welcome .eyebrow{color:#247e81}
+.portal-layout[data-saga-role="student"] .student-orb{color:#0d898015}
+.portal-layout[data-saga-role="student"] .topbar .crumb{color:#227e81}
+.portal-layout[data-saga-role="student"] .sidebar-brand strong{color:#155b64}
+.portal-layout[data-saga-role="student"] .student-overview-stats .student-stat{
+  border-color:#d5eae8;background:#fff;box-shadow:0 4px 15px rgba(16,85,89,.04)
+}
+.portal-layout[data-saga-role="student"] .student-overview-stats .student-stat strong{
+  color:#135e66
+}
+.portal-layout[data-saga-role="student"] .student-grade-card-modern{
+  border-color:#dcecea;box-shadow:0 4px 15px rgba(16,85,89,.035)
+}
+.portal-layout[data-saga-role="student"] .grade-course-icon{
+  background:#e5f5f1;color:#176d71
+}
+.portal-layout[data-saga-role="student"] .student-assessment-track{background:#d6eee9}
+.portal-layout[data-saga-role="student"] .student-assessment-track>span{background:#147981}
+.portal-layout[data-saga-role="student"] .student-itemized-on-demand summary span{color:#146a73}
+.portal-layout[data-saga-role="student"] .student-official-notice{
+  background:#ecf9f7;color:#355f63;border-color:#c5e6e0;border-left-color:#147981
+}
+.portal-layout[data-saga-role="student"] .student-official-notice strong{color:#0d5c63}
+.portal-layout[data-saga-role="student"] .private-pill{background:#dff5eb;color:#216b50}
+
+/* Role-specific contrast in dark mode. No red/amber grade statuses are overridden. */
+.portal-layout[data-bs-theme="dark"][data-saga-role="teacher"]{
+  --saga-role-primary:#a9cfff;--saga-role-hover:#8fbbf5;
+  --saga-role-surface:#263b58;--saga-role-border:#344b67;
+  --saga-role-ink:#d2e5ff;--saga-role-background:#111b2d
+}
+.portal-layout[data-bs-theme="dark"][data-saga-role="student"]{
+  --saga-role-primary:#a8e4db;--saga-role-hover:#83d3c7;
+  --saga-role-surface:#1b393e;--saga-role-border:#345557;
+  --saga-role-ink:#c8f2ec;--saga-role-background:#101e24
+}
+.portal-layout[data-bs-theme="dark"][data-saga-role] .content-wrap{
+  background:var(--saga-role-background)
+}
+.portal-layout[data-bs-theme="dark"][data-saga-role] .side-link.selected{
+  color:var(--saga-role-ink);background:var(--saga-role-surface)
+}
+.portal-layout[data-bs-theme="dark"][data-saga-role] .btn-primary{
+  /* Use dark buttons with light text for sufficient contrast. */
+  --bs-btn-bg:#165e75;--bs-btn-border-color:#165e75;
+  --bs-btn-hover-bg:#124a60;--bs-btn-hover-border-color:#124a60;
+  --bs-btn-active-bg:#124a60;--bs-btn-active-border-color:#124a60;
+  --bs-btn-color:#fff;--bs-btn-hover-color:#fff;--bs-btn-active-color:#fff
+}
+.portal-layout[data-bs-theme="dark"][data-saga-role="student"] .btn-primary{
+  --bs-btn-bg:#08646b;--bs-btn-border-color:#08646b;
+  --bs-btn-hover-bg:#075259;--bs-btn-hover-border-color:#075259
+}
+.portal-layout[data-bs-theme="dark"][data-saga-role] .btn-outline-primary{
+  --bs-btn-color:var(--saga-role-primary);
+  --bs-btn-border-color:var(--saga-role-primary);
+  --bs-btn-hover-bg:var(--saga-role-surface);
+  --bs-btn-hover-border-color:var(--saga-role-primary);
+  --bs-btn-hover-color:#f1fafc
+}
+.portal-layout[data-bs-theme="dark"][data-saga-role="teacher"] .welcome-strip{
+  background:linear-gradient(115deg,#1d304e,#18263e);
+  border-color:#355171;color:#eff6ff
+}
+.portal-layout[data-bs-theme="dark"][data-saga-role="teacher"] .welcome-strip p{color:#c6d7ed}
+.portal-layout[data-bs-theme="dark"][data-saga-role="teacher"] .welcome-strip .eyebrow{color:#adcaf1}
+.portal-layout[data-bs-theme="dark"][data-saga-role="teacher"] .stat-card{
+  background:#1b2a41;border-color:#324761
+}
+.portal-layout[data-bs-theme="dark"][data-saga-role="teacher"] .stat-card strong,
+.portal-layout[data-bs-theme="dark"][data-saga-role="teacher"] .sidebar-brand strong{
+  color:#c6dfff
+}
+.portal-layout[data-bs-theme="dark"][data-saga-role="student"] .student-overview-hero,
+.portal-layout[data-bs-theme="dark"][data-saga-role="student"] .student-welcome{
+  background:linear-gradient(115deg,#163739,#192d37);border-color:#345759
+}
+.portal-layout[data-bs-theme="dark"][data-saga-role="student"] .student-welcome h2,
+.portal-layout[data-bs-theme="dark"][data-saga-role="student"] .sidebar-brand strong,
+.portal-layout[data-bs-theme="dark"][data-saga-role="student"] .student-overview-stats .student-stat strong{
+  color:#c3f0e9
+}
+.portal-layout[data-bs-theme="dark"][data-saga-role="student"] .student-welcome p{color:#b8d8d8}
+.portal-layout[data-bs-theme="dark"][data-saga-role="student"] .student-welcome .eyebrow{color:#93d9d1}
+.portal-layout[data-bs-theme="dark"][data-saga-role="student"] .student-overview-stats .student-stat,
+.portal-layout[data-bs-theme="dark"][data-saga-role="student"] .student-grade-card-modern{
+  background:#1a3035;border-color:#33565a
+}
+.portal-layout[data-bs-theme="dark"][data-saga-role="student"] .grade-course-icon{
+  background:#284e50;color:#b4eee3
+}
+.portal-layout[data-bs-theme="dark"][data-saga-role="student"] .student-assessment-track{background:#315258}
+.portal-layout[data-bs-theme="dark"][data-saga-role="student"] .student-assessment-track>span{background:#55c6b8}
+.portal-layout[data-bs-theme="dark"][data-saga-role="student"] .student-itemized-on-demand summary span,
+.portal-layout[data-bs-theme="dark"][data-saga-role="student"] .student-official-notice strong{color:#b7eae5}
+.portal-layout[data-bs-theme="dark"][data-saga-role="student"] .student-official-notice{
+  color:#c2dcd8;background:#19383a;border-color:#386061;border-left-color:#69cdc1
+}
+
+.portal-layout[data-bs-theme="dark"][data-saga-role="teacher"] .eyebrow,
+.portal-layout[data-bs-theme="dark"][data-saga-role="teacher"] .topbar .crumb{color:#b5d4f8}
+.portal-layout[data-bs-theme="dark"][data-saga-role="student"] .topbar .crumb{color:#a3e1d9}
+.portal-layout[data-bs-theme="dark"][data-saga-role="teacher"] .private-pill{
+  background:#463b28;color:#f1d6a2
+}
+.portal-layout[data-bs-theme="dark"][data-saga-role="student"] .private-pill{
+  background:#23493f;color:#c3e8d4
+}
+
+/* The footer is OUTSIDE the portal component, so its theme follows the body.
+   Its colors distinguish each role only subtly and never encode grade outcomes. */
+.saga-site-footer{
+  --saga-footer-bg:#eff3fa;--saga-footer-fg:#1b3657;
+  --saga-footer-muted:#536f89;--saga-footer-link:#225e89;
+  --saga-footer-stroke:#d6e2ee;
+  background:var(--saga-footer-bg);
+  color:var(--saga-footer-fg);
+  border-top:1px solid var(--saga-footer-stroke);
+  transition:background-color .15s ease,border-color .15s ease,color .15s ease
+}
+.saga-site-footer .saga-site-footer-title,
+.saga-site-footer .saga-site-footer-title a{color:var(--saga-footer-fg)}
+.saga-site-footer .saga-site-footer-meta,
+.saga-site-footer .saga-site-footer-meta strong{color:var(--saga-footer-muted)}
+.saga-site-footer .saga-site-footer-title a:hover,
+.saga-site-footer .saga-site-footer-title a:focus-visible,
+.saga-site-footer .saga-site-footer-meta a:hover,
+.saga-site-footer .saga-site-footer-meta a:focus-visible{color:var(--saga-footer-link)}
+.saga-site-footer .saga-site-footer-meta a{
+  color:var(--saga-footer-link);text-decoration-color:var(--saga-footer-link)
+}
+.saga-site-footer .saga-site-footer-build,
+.saga-site-footer .saga-site-footer-dot,
+.saga-site-footer .saga-site-footer-divider{color:var(--saga-footer-muted)}
+.saga-site-footer a:focus-visible{outline-color:var(--saga-footer-link)}
+body:has(.portal-layout[data-saga-role="teacher"]) .saga-site-footer{
+  --saga-footer-bg:#eaf1fb;--saga-footer-stroke:#cad9ed;
+  --saga-footer-fg:#193b64;--saga-footer-muted:#496781;--saga-footer-link:#185b8b
+}
+body:has(.portal-layout[data-saga-role="student"]) .saga-site-footer{
+  --saga-footer-bg:#eaf8f5;--saga-footer-stroke:#cee8e2;
+  --saga-footer-fg:#174b53;--saga-footer-muted:#406b6d;--saga-footer-link:#08696f
+}
+body[data-saga-theme="dark"] .saga-site-footer{
+  --saga-footer-bg:#101c2f;--saga-footer-stroke:#354561;
+  --saga-footer-fg:#ecf4ff;--saga-footer-muted:#b5c9de;--saga-footer-link:#93d8ff
+}
+body[data-saga-theme="dark"]:has(.portal-layout[data-saga-role="teacher"]) .saga-site-footer{
+  --saga-footer-bg:#15243a;--saga-footer-stroke:#355071;
+  --saga-footer-fg:#eff6ff;--saga-footer-muted:#b5d0ee;--saga-footer-link:#a8d5ff
+}
+body[data-saga-theme="dark"]:has(.portal-layout[data-saga-role="student"]) .saga-site-footer{
+  --saga-footer-bg:#122d30;--saga-footer-stroke:#31575a;
+  --saga-footer-fg:#e4f9f6;--saga-footer-muted:#afdad4;--saga-footer-link:#9be8df
+}
+@media print{
+  .portal-layout[data-saga-role] .main-area{background:transparent!important}
+  .portal-layout[data-saga-role] .btn-primary{box-shadow:none!important}
+}
+@media(prefers-reduced-motion:reduce){
+  .saga-site-footer{transition:none}
+}

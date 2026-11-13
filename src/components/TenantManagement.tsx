@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AccountMenu, { type AccountTheme } from "./AccountMenu";
+import { saveSagaTheme } from "./ThemeSync";
 import { csvCell, daysUntil, tenantHealth, todayManila } from "@/lib/tenant-operations";
 
 type Payment = {
@@ -105,7 +106,7 @@ export default function TenantManagement({ managerName, managerEmail, managerSch
     if (saved === "light" || saved === "dark") setTheme(saved);
   }, []);
   function setAppearance(next: AccountTheme) {
-    window.localStorage.setItem("saga-portal-theme", next);
+    saveSagaTheme(next);
     setTheme(next);
   }
   async function logout() {
