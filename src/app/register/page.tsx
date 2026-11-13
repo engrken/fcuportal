@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import SchoolSelect from "@/components/SchoolSelect";
+import SchoolSelect, { NEW_SCHOOL_OPTION } from "@/components/SchoolSelect";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -12,6 +12,7 @@ export default function RegisterPage() {
   const [role, setRole] = useState<"STUDENT" | "TEACHER">("STUDENT");
   const [schoolId, setSchoolId] = useState("");
   const [schoolName, setSchoolName] = useState("");
+  const [teacherSchoolChoice, setTeacherSchoolChoice] = useState("");
   const [studentNumber, setStudentNumber] = useState("");
   const [email, setEmail] = useState("");
 
@@ -19,9 +20,25 @@ export default function RegisterPage() {
     const params = new URLSearchParams(window.location.search);
     setStudentNumber(params.get("studentNumber") || "");
     setSchoolId(params.get("schoolId") || "");
-    setSchoolName(params.get("schoolName") || "");
+    const requestedName = params.get("schoolName") || "";
+    const requestedSchoolId = params.get("schoolId") || "";
+    setSchoolName(requestedName);
+    setTeacherSchoolChoice(requestedName ? NEW_SCHOOL_OPTION : requestedSchoolId);
     setEmail(params.get("email") || "");
   }, []);
+
+  const teacherCreatingSchool = teacherSchoolChoice === NEW_SCHOOL_OPTION;
+  function chooseRole(nextRole: "STUDENT" | "TEACHER") {
+    if (role === nextRole) return;
+    setRole(nextRole);
+    setChallengeId("");
+    setError("");
+  }
+  function chooseTeacherSchool(nextChoice: string) {
+    setTeacherSchoolChoice(nextChoice);
+    setChallengeId("");
+    setError("");
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -33,8 +50,8 @@ export default function RegisterPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          schoolId: role === "STUDENT" ? schoolId : undefined,
-          schoolName: role === "TEACHER" ? schoolName : undefined,
+          schoolId: role === "STUDENT" ? schoolId : role === "TEACHER" && !teacherCreatingSchool ? teacherSchoolChoice : undefined,
+          schoolName: role === "TEACHER" && teacherCreatingSchool ? schoolName : undefined,
           fullName: form.get("fullName") || undefined,
           email: form.get("email"),
           password: form.get("password"),
@@ -60,18 +77,32 @@ export default function RegisterPage() {
     }
   }
 
-  const canSubmit = !busy && (role === "STUDENT" ? !!schoolId : schoolName.trim().length >= 2);
-  const privacyHref = role === "STUDENT" && schoolId ? `/privacy?schoolId=${encodeURIComponent(schoolId)}` : "/privacy";
-  const termsHref = role === "STUDENT" && schoolId ? `/terms?schoolId=${encodeURIComponent(schoolId)}` : "/terms";
+  const canSubmit = !busy && (role === "STUDENT"
+    ? !!schoolId
+    : teacherCreatingSchool ? schoolName.trim().length >= 2 : !!teacherSchoolChoice);
+  const selectedSchoolId = role === "STUDENT" ? schoolId : teacherCreatingSchool ? "" : teacherSchoolChoice;
+  const privacyHref = selectedSchoolId ? `/privacy?schoolId=${encodeURIComponent(selectedSchoolId)}` : "/privacy";
+  const termsHref = selectedSchoolId ? `/terms?schoolId=${encodeURIComponent(selectedSchoolId)}` : "/terms";
 
   return <main className="auth-shell">
     <section className="auth-art"><div className="brand-mark">S</div><p className="eyebrow">SAGA · SCHOOL GRADE PORTAL</p><h1>Learn with<br/>confidence.</h1><p className="auth-caption">One workspace for class records, assessments, attendance, and student grade access.</p><div className="art-orbit orbit-one"/><div className="art-orbit orbit-two"/><div className="art-spark">✦</div><div className="auth-art-footer">School workspaces are kept separate</div></section>
-    <section className="auth-panel"><div className="auth-form-wrap"><div className="mobile-brand"><span className="brand-mark small">S</span><span>SAGA Portal</span></div><p className="eyebrow text-primary">GET STARTED</p><h2>Create your account</h2><p className="muted mb-4">Students join a school after a teacher has registered it. Teachers enter their school name to create or join that school workspace.</p>
+    <section className="auth-panel"><div className="auth-form-wrap"><div className="mobile-brand"><span className="brand-mark small">S</span><span>SAGA Portal</span></div><p className="eyebrow text-primary">GET STARTED</p><h2>Create your account</h2><p className="muted mb-4">Students join registered schools. Teachers can select an existing school or register a new school if it is not listed.</p>
       <form onSubmit={submit}>
         <label className="form-label">I am a</label>
-        <div className="role-switch mb-3"><button type="button" className={role === "STUDENT" ? "active" : ""} onClick={() => setRole("STUDENT")}>Student</button><button type="button" className={role === "TEACHER" ? "active" : ""} onClick={() => setRole("TEACHER")}>Teacher</button></div>
-        {role === "STUDENT" ? <><label className="form-label" htmlFor="schoolId">School</label><SchoolSelect id="schoolId" value={schoolId} onChange={setSchoolId}/><div className="form-text mb-3">Only schools with a registered teacher appear here.</div><label className="form-label" htmlFor="studentNumber">Student ID</label><input className="form-control mb-3" id="studentNumber" name="studentNumber" value={studentNumber} onChange={event=>setStudentNumber(event.target.value)} required maxLength={40}/></> : <><label className="form-label" htmlFor="schoolName">School name</label><input className="form-control mb-2" id="schoolName" name="schoolName" placeholder="Enter your school’s name" value={schoolName} onChange={event=>setSchoolName(event.target.value)} required maxLength={160}/><div className="form-text mb-3">The first teacher creates the school workspace. Additional teacher accounts need a paid plan; enter the exact same name to join.</div><label className="form-label" htmlFor="fullName">Full name</label><input className="form-control mb-3" id="fullName" name="fullName" required maxLength={120}/><label className="form-label" htmlFor="inviteCode">Teacher invitation code</label><input className="form-control mb-3" id="inviteCode" name="inviteCode" required/></>}
-        <label className="form-label" htmlFor="regEmail">Email address</label><input className="form-control mb-3" id="regEmail" name="email" type="email" autoComplete="email" placeholder="name@example.com" value={email} onChange={event=>setEmail(event.target.value)} required maxLength={200}/>
+        <div className="role-switch mb-3"><button type="button" className={role === "STUDENT" ? "active" : ""} onClick={() => chooseRole("STUDENT")}>Student</button><button type="button" className={role === "TEACHER" ? "active" : ""} onClick={() => chooseRole("TEACHER")}>Teacher</button></div>
+        {role === "STUDENT" ? <><label className="form-label" htmlFor="schoolId">School</label><SchoolSelect id="schoolId" value={schoolId} onChange={value => { setSchoolId(value); setChallengeId(""); setError(""); }}/><div className="form-text mb-3">Only schools with a registered teacher appear here.</div><label className="form-label" htmlFor="studentNumber">Student ID</label><input className="form-control mb-3" id="studentNumber" name="studentNumber" value={studentNumber} onChange={event=>setStudentNumber(event.target.value)} required maxLength={40}/></> : <>
+          <label className="form-label" htmlFor="teacherSchoolId">School</label>
+          <SchoolSelect id="teacherSchoolId" value={teacherSchoolChoice} onChange={chooseTeacherSchool} audience="teacher" allowNotListed/>
+          {teacherCreatingSchool ? <>
+            <div className="form-text mb-2">Your school is not in the list. Enter its official name to create a new school workspace.</div>
+            <label className="form-label" htmlFor="schoolName">New school name</label>
+            <input className="form-control mb-2" id="schoolName" name="schoolName" placeholder="Enter the complete official school name"
+              value={schoolName} onChange={event => { setSchoolName(event.target.value); setChallengeId(""); setError(""); }}
+              autoComplete="organization" required maxLength={160} minLength={2}/>
+            <div className="form-text mb-3">A new school is created only after your email verification succeeds. Use the official name to avoid duplicate schools.</div>
+          </> : <div className="form-text mb-3">Select your existing school to join its workspace. Additional teacher accounts depend on the school's plan. If your school is missing, select “Not listed” above.</div>}
+          <label className="form-label" htmlFor="fullName">Full name</label><input className="form-control mb-3" id="fullName" name="fullName" required maxLength={120}/><label className="form-label" htmlFor="inviteCode">Teacher invitation code</label><input className="form-control mb-3" id="inviteCode" name="inviteCode" required/></>}
+        <label className="form-label" htmlFor="regEmail">Email address</label><input className="form-control mb-3" id="regEmail" name="email" type="email" autoComplete="email" placeholder="name@example.com" value={email} onChange={event=>{setEmail(event.target.value);setChallengeId("");setError("");}} required maxLength={200}/>
         <label className="form-label" htmlFor="regPassword">Password</label><input className="form-control" id="regPassword" name="password" type="password" minLength={12} required autoComplete="new-password"/><div className="form-text mb-3">Use at least 12 characters.</div>
         <div className="form-check mb-2"><input className="form-check-input" type="checkbox" id="termsOfService" name="termsOfService" required/><label className="form-check-label small" htmlFor="termsOfService">I agree to the <Link href={termsHref} target="_blank" rel="noreferrer">Terms of Service</Link>.</label></div>
         <div className="form-check mb-3"><input className="form-check-input" type="checkbox" id="privacyNotice" name="privacyNotice" required/><label className="form-check-label small" htmlFor="privacyNotice">I have read the <Link href={privacyHref} target="_blank" rel="noreferrer">Privacy Notice</Link>.</label></div>
