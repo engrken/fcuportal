@@ -1009,3 +1009,92 @@
   .grade-simulator-embedded { height:auto;max-height:none; }
   .grade-simulator-embedded .grade-simulator-body { overflow:visible; }
 }
+
+
+/* Responsive workbook: keep record cells readable at every desktop width.
+   Auto-fit shows category pages, while "Show all" explicitly enables scrolling. */
+.portal-layout .scorebook-fitbar {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px 18px;
+  flex-wrap:wrap;
+  margin:8px 0 12px;
+  padding:10px 13px;
+  border:1px solid var(--bs-border-color,#d9e2ef);
+  border-radius:10px;
+  background:var(--bs-tertiary-bg,#f5f8fc);
+  color:var(--bs-body-color,#26364f);
+}
+.portal-layout .scorebook-fitbar-summary { display:grid;gap:3px;flex:1;min-width:210px; }
+.portal-layout .scorebook-fitbar-summary b { font-size:.78rem;line-height:1.2; }
+.portal-layout .scorebook-fitbar-summary small {
+  color:var(--bs-secondary-color,#67768d);
+  font-size:.69rem;line-height:1.5;
+}
+.portal-layout .scorebook-fitbar-tools { display:flex;align-items:end;justify-content:flex-end;gap:9px;flex-wrap:wrap;min-width:0; }
+.portal-layout .scorebook-fit-selector { display:grid;gap:4px;font-size:.65rem;font-weight:750;color:var(--bs-secondary-color,#667791); }
+.portal-layout .scorebook-fit-selector .form-select {min-width:172px;width:auto;font-size:.74rem;padding-top:5px;padding-bottom:5px;max-width:100%; }
+.portal-layout .scorebook-fit-pages {display:flex;align-items:center;gap:5px;min-width:0; }
+.portal-layout .scorebook-fit-pages .form-select {width:min(260px,32vw);min-width:145px;font-size:.72rem;max-width:100%;padding-top:5px;padding-bottom:5px; }
+.portal-layout .scorebook-fit-pages .btn {min-width:31px;min-height:32px;padding:3px 8px;font-size:1.1rem;line-height:1; }
+.portal-layout .scorebook-section .section-heading { gap:12px; }
+.portal-layout .scorebook-section .scorebook-toolbar {display:flex;flex-wrap:wrap;align-items:center;gap:8px;}
+.portal-layout .scorebook-section .scorebook-toolbar .btn {min-height:32px;white-space:normal;}
+/* Do not shrink scores to one-character columns simply to avoid scrolling. */
+.portal-layout .score-sheet-wrap.score-sheet-wrap-auto {overflow-x:clip!important;max-width:100%; }
+.portal-layout .score-sheet-wrap.score-sheet-wrap-full {
+  overflow-x:auto!important;
+  overflow-y:visible;
+  max-width:100%;
+  overscroll-behavior-x:contain;
+  scrollbar-width:thin;
+}
+.portal-layout .score-sheet {table-layout:fixed;width:100%;min-width:0;}
+.portal-layout .score-sheet-wrap-full .score-sheet {table-layout:fixed;max-width:none; }
+.portal-layout .score-sheet thead th {overflow-wrap:normal!important;word-break:normal!important;hyphens:none!important;}
+.portal-layout .score-sheet-category span,
+.portal-layout .score-sheet-subcategory span {
+  word-break:normal!important;
+  overflow-wrap:normal!important;
+  text-wrap:wrap;
+}
+.portal-layout .score-sheet-assessment {font-size:.7rem;line-height:1.2;}
+.portal-layout .score-sheet-assessment span {
+  font-size:.69rem;
+  line-height:1.2;
+  max-height:4.8em!important;
+  overflow:hidden;
+  overflow-wrap:normal!important;
+  word-break:normal!important;
+  hyphens:none!important;
+}
+.portal-layout .score-sheet-assessment small {font-size:.6rem;line-height:1.2;}
+.portal-layout .score-sheet-category-subtotal {font-size:.67rem;overflow-wrap:normal!important;word-break:normal!important;line-height:1.25;}
+.portal-layout .score-sheet-category-subtotal small {font-size:.59rem;line-height:1.2;}
+.portal-layout .score-sheet-student b {font-size:.77rem;line-height:1.38;overflow-wrap:break-word;}
+.portal-layout .score-sheet-student small {font-size:.65rem;}
+.portal-layout .score-sheet tbody .score-sheet-total {font-size:.8rem;font-weight:850;white-space:normal;overflow-wrap:normal;}
+.portal-layout .score-sheet-category-equivalent,
+.portal-layout .score-sheet-category-weight {font-size:.73rem;white-space:normal;overflow-wrap:normal;}
+.portal-layout .score-sheet-category-weight b {font-size:.78rem;line-height:1.25;}
+.portal-layout .score-sheet-category-weight small {font-size:.62rem;line-height:1.25;}
+.portal-layout .score-sheet-input {font-size:.74rem;height:30px;}
+.portal-layout .score-sheet-status {font-size:.6rem;height:22px;}
+.portal-layout .score-sheet-entry {gap:4px;}
+@media(max-width:1080px) {
+  .portal-layout .scorebook-fitbar {align-items:stretch;}
+  .portal-layout .scorebook-fitbar-tools {justify-content:flex-start;}
+  .portal-layout .score-sheet-student b {font-size:.7rem;}
+}
+@media(max-width:760px) {
+  .portal-layout .scorebook-fitbar {padding:9px 11px;gap:9px;}
+  .portal-layout .scorebook-fitbar-tools {width:100%;}
+  .portal-layout .scorebook-fit-selector {flex:1;min-width:135px;}
+  .portal-layout .scorebook-fit-selector .form-select {width:100%;min-width:0;}
+  .portal-layout .scorebook-fit-pages {flex:2;min-width:160px;}
+  .portal-layout .scorebook-fit-pages .form-select {flex:1;min-width:0;width:100%;}
+}
+@media print {
+  .portal-layout .scorebook-fitbar {display:none!important;}
+}

@@ -1,5 +1,5 @@
 "use client";
-import { Fragment, FormEvent, useEffect, useMemo, useState } from "react";
+import { Fragment, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import ChangeEmailForm from "./ChangeEmailForm";
@@ -11,6 +11,7 @@ import { PhilippineHolidayCalendar } from "./PhilippineHolidayCalendar";
 import { calculateCategoryPercent, calculateFinal, calculateGradeBreakdown, convertRawPercent } from "@/lib/grades";
 import { classWorkspaceHref, resolveClassSelection, type ClassSection } from "@/lib/class-navigation";
 import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
+import { buildWorkbookPages, workbookWidths } from "@/lib/scorebook-layout";
 
 type User = { id: string; role: string; fullName: string; email: string; isTenantManager?: boolean; emailDeliveryEnabled?: boolean; profileImagePath: string | null; studentNumber: string | null; courseProgram?: string | null; yearLevel?: string | null; school: { id: string; slug: string; name: string; shortName: string; portalTitle: string; logoText: string; logoPath: string | null; primaryColor: string } };
 type Subject = { id: string; classId: string | null; code: string; title: string; term: string; academicYear: string; schedule: string | null; courseYear: string | null; isPublished: boolean; gradeStatus: "DRAFT" | "SUBMITTED" | "VERIFIED"; submittedAt: string | null; verifiedAt: string | null; _count?: { enrollments: number } };
@@ -380,6 +381,28 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   const [gradeChangeEnrollmentId, setGradeChangeEnrollmentId] = useState(""); const [gradeChangeGrade, setGradeChangeGrade] = useState("AUTO"); const [gradeChangeRemark, setGradeChangeRemark] = useState("AUTO"); const [gradeChangeReason, setGradeChangeReason] = useState("");
   const [attendanceQuickOpenId, setAttendanceQuickOpenId] = useState(initialAttendanceToday && initialClassId ? initialClassId : "");
   const [showWeightBreakdown, setShowWeightBreakdown] = useState(false);
+  const [scorebookView, setScorebookView] = useState<"auto" | "all">("auto");
+  const [scorebookPage, setScorebookPage] = useState(0);
+  const [scorebookWidth, setScorebookWidth] = useState(1250);
+  const scorebookRegionRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (classSection !== "record") return;
+    const region = scorebookRegionRef.current;
+    if (!region) return;
+    const recalc = () => {
+      const width = Math.max(760, Math.round(region.clientWidth - 32));
+      setScorebookWidth(previous => previous === width ? previous : width);
+    };
+    recalc();
+    if (typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(recalc);
+      observer.observe(region);
+      return () => observer.disconnect();
+    }
+    window.addEventListener("resize", recalc);
+    return () => window.removeEventListener("resize", recalc);
+  }, [classSection, activeId, detail?.id, sidebarCollapsed]);
+  useEffect(() => { setScorebookPage(0); setScorebookView("auto"); }, [activeId]);
   const [visibilityManagerQuery, setVisibilityManagerQuery] = useState<string | null>(null);
   const [simulatingGradeId, setSimulatingGradeId] = useState<string | null>(null);
   useEffect(() => { if (!notice && !err) return; const timer = window.setTimeout(() => { setNotice(""); setErr(""); }, err ? 20000 : 5500); return () => window.clearTimeout(timer); }, [notice, err]);
@@ -804,33 +827,59 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
       return { parent, subcategories, items };
     }).filter(group => group.items.length > 0);
   }, [detail, scorebookCategories, scorebookItems]);
-  // Keep assessment headers and score cells in the same hierarchical order as
-  // the parent category tree.
+  // Keep all assessment data loaded. Auto-fit only changes which columns render,
+  // never which recorded scores contribute to final grades or exports.
   const scorebookAssessments = useMemo(() => scorebookGroups.flatMap(group => group.items), [scorebookGroups]);
-  // Like the paper ECR: every leaf category ends in an equivalent and
-  // an earned-weight course contribution column.
-  const scorebookDisplayColumns = useMemo(() => scorebookGroups.flatMap(group =>
+  const scorebookPages = useMemo(() => buildWorkbookPages(
+    scorebookGroups.flatMap(group => group.subcategories.map(category => ({
+      id: category.id,
+      label: category.name,
+      assessmentIds: group.items.filter(item => item.categoryId === category.id).map(item => item.id)
+    }))),
+    scorebookWidth
+  ), [scorebookGroups, scorebookWidth]);
+  const currentScorebookPage = Math.min(scorebookPage, Math.max(0, scorebookPages.length - 1));
+  const scorebookDisplayGroups = useMemo(() => {
+    if (scorebookView === "all") return scorebookGroups;
+    const page = scorebookPages[currentScorebookPage];
+    if (!page) return [] as typeof scorebookGroups;
+    const shown = new Set(page.segments.flatMap(segment => segment.assessmentIds));
+    return scorebookGroups.map(group => {
+      const items = group.items.filter(item => shown.has(item.id));
+      const subcategories = group.subcategories.filter(category => items.some(item => item.categoryId === category.id));
+      return { parent: group.parent, items, subcategories };
+    }).filter(group => group.items.length > 0);
+  }, [scorebookGroups, scorebookPages, currentScorebookPage, scorebookView]);
+  const scorebookVisibleAssessments = useMemo(() => scorebookDisplayGroups.flatMap(group => group.items), [scorebookDisplayGroups]);
+  const scorebookVisibleCategories = useMemo(() => scorebookDisplayGroups.flatMap(group => group.subcategories), [scorebookDisplayGroups]);
+  const scorebookDisplayColumns = useMemo(() => scorebookDisplayGroups.flatMap(group =>
     group.subcategories.flatMap(category => [
       ...group.items.filter(item => item.categoryId === category.id).map(item => ({ kind: "assessment" as const, category, item })),
       { kind: "equivalent" as const, category },
       { kind: "weight" as const, category }
     ])
-  ), [scorebookGroups]);
-  const scorebookColumnUnits = scorebookDisplayColumns.reduce((n, column) => n + (column.kind === "weight" ? 1.12 : 1), 0) || 1;
+  ), [scorebookDisplayGroups]);
+  const scorebookColumnWidths = workbookWidths(scorebookWidth);
+  const scorebookTableMinWidth = scorebookColumnWidths.student + scorebookColumnWidths.attendance +
+    scorebookColumnWidths.total + scorebookColumnWidths.final + scorebookColumnWidths.remark +
+    scorebookDisplayColumns.reduce((total, column) =>
+      total + (column.kind === "assessment" ? scorebookColumnWidths.assessment :
+        column.kind === "equivalent" ? scorebookColumnWidths.equivalent : scorebookColumnWidths.weight), 0);
   const scorebookHeaderRows = useMemo(() => {
-    if (!detail || !scorebookAssessments.length) return { rows: [] as Array<Array<{ category: Category; colSpan: number; rowSpan: number }>>, rowSpan: 1 };
+    if (!detail || !scorebookVisibleAssessments.length) return { rows: [] as Array<Array<{ category: Category; colSpan: number; rowSpan: number }>>, rowSpan: 1 };
     const itemCounts = new Map<string, number>();
     const depthById = new Map<string, number>();
     const countItems = (category: Category, depth: number): number => {
       depthById.set(category.id, depth);
-      const own = scorebookAssessments.filter(item => item.categoryId === category.id).length + (scorebookCategories.some(leaf => leaf.id === category.id) ? 2 : 0);
+      const own = scorebookVisibleAssessments.filter(item => item.categoryId === category.id).length +
+        (scorebookVisibleCategories.some(leaf => leaf.id === category.id) ? 2 : 0);
       const children = detail.categories.filter(item => item.parentId === category.id).slice().sort((a,b)=>a.sortOrder-b.sortOrder);
       const count = own + children.reduce((sum, child) => sum + countItems(child, depth + 1), 0);
       itemCounts.set(category.id, count);
       return count;
     };
-    for (const group of scorebookGroups) countItems(group.parent, 0);
-    const maxDepth = Math.max(0, ...scorebookAssessments.map(item => depthById.get(item.categoryId) ?? 0));
+    for (const group of scorebookDisplayGroups) countItems(group.parent, 0);
+    const maxDepth = Math.max(0, ...scorebookVisibleAssessments.map(item => depthById.get(item.categoryId) ?? 0));
     const rows = Array.from({ length: maxDepth + 1 }, () => [] as Array<{ category: Category; colSpan: number; rowSpan: number }>);
     const append = (category: Category, depth: number) => {
       const colSpan = itemCounts.get(category.id) ?? 0;
@@ -839,10 +888,9 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
       rows[depth].push({ category, colSpan, rowSpan: children.length ? 1 : maxDepth - depth + 1 });
       children.forEach(child => append(child, depth + 1));
     };
-    scorebookGroups.forEach(group => append(group.parent, 0));
-    // Category headings occupy the first rows; the assessment-item row follows.
+    scorebookDisplayGroups.forEach(group => append(group.parent, 0));
     return { rows, rowSpan: maxDepth + 2 };
-  }, [detail, scorebookGroups, scorebookAssessments, scorebookCategories]);
+  }, [detail, scorebookDisplayGroups, scorebookVisibleAssessments, scorebookVisibleCategories]);
   // Include intermediate nodes such as Major Examinations in the workbook header.
   const printCategories = useMemo(() => detail ? leafCategories(detail.categories) : [], [detail]);
   const weightGroups = useMemo(() => {
@@ -994,13 +1042,46 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
             {(()=>{const alerted=filteredEnrollments.map(enrollment=>({enrollment,summary:attendanceSummary(enrollment,detail.assessments)})).filter(item=>item.summary.alertLevel!=="none");const critical=alerted.filter(item=>item.summary.alertLevel==="critical").length;const early=alerted.length-critical;return <section className="attendance-alert-panel" aria-label="Attendance monitoring overview"><div className="attendance-alert-header"><div><span className="attendance-alert-eyebrow">ATTENDANCE OVERVIEW</span><b>Monitoring alerts</b><small>Early warning starts at 10% absent. High risk is above 20%; excused days are excluded.</small></div><div className="attendance-alert-summary"><span className="attendance-alert-total"><b>{alerted.length}</b><small>{alerted.length===1?"student flagged":"students flagged"}</small></span><span className="attendance-alert-count early"><i></i>{early} early</span><span className="attendance-alert-count critical"><i></i>{critical} high risk</span></div></div>{alerted.length?<div className="attendance-alert-list">{alerted.map(({enrollment,summary})=><article key={enrollment.id} className={`attendance-alert-item ${summary.alertLevel}`}><div className="attendance-alert-person"><b>{enrollment.studentName}</b><span className={`attendance-alert-badge ${summary.alertLevel}`}>{summary.alertLevel==="critical"?"High risk":"Early warning"}</span></div><div className="attendance-alert-detail"><span>{summary.absent} absent of {summary.present+summary.absent} counted days</span><b>{summary.absencePercent?.toFixed(1)}%</b></div><div className="attendance-alert-meter" role="presentation"><span style={{width:`${Math.min(100,summary.absencePercent??0)}%`}} /></div></article>)}</div>:<div className="attendance-alert-clear"><span aria-hidden="true">✓</span><div><b>No attendance alerts</b><small>No students in the current roster filter have reached the 10% absence threshold.</small></div></div>}</section>})()}{detail.assessments.filter(item=>item.title.toLocaleLowerCase().startsWith("attendance ·")).sort((a,b)=>(b.dueDate||"").localeCompare(a.dueDate||"")).length ? <div className="table-scroll"><table className="table grade-table ecr-table attendance-table"><thead><tr><th>STUDENT</th><th>SUMMARY</th>{detail.assessments.filter(item=>item.title.toLocaleLowerCase().startsWith("attendance ·")).sort((a,b)=>(b.dueDate||"").localeCompare(a.dueDate||"")).map(item=><th key={item.id}>{item.dueDate ? new Date(item.dueDate).toLocaleDateString() : item.title}<small>{item.attendanceType === "ONLINE" ? "Online" : item.attendanceType === "FACE_TO_FACE" ? "Face-to-Face" : "Type not set"} · {item.scheduleOverrideReason ? `Make-up class: ${item.scheduleOverrideReason}` : "Scheduled class day"}</small></th>)}</tr></thead><tbody>{filteredEnrollments.map(enrollment=>{const summary=attendanceSummary(enrollment,detail.assessments);return <tr key={enrollment.id}><td><b>{enrollment.studentName}</b><small className="d-block text-secondary">{enrollment.studentNumber||"No student ID"}</small></td><td className="attendance-summary"><b>{summary.present}/{summary.present+summary.absent} present · {summary.percent===null?"—":summary.percent.toFixed(1)+"%"}</b><small>P {summary.present} · A {summary.absent} · E {summary.excused}</small>{summary.atRisk&&<span className="absence-risk-badge">DANGER OF FAILING · {summary.absencePercent?.toFixed(1)}% ABSENT</span>}</td>{detail.assessments.filter(item=>item.title.toLocaleLowerCase().startsWith("attendance ·")).sort((a,b)=>(b.dueDate||"").localeCompare(a.dueDate||"")).map(item=>{const score=enrollment.scores.find(value=>value.assessmentId===item.id);const value=score?.remark==="EXCUSED"?"EXCUSED":score?.remark==="ABSENT"?"ABSENT":score?.remark==="PRESENT"||score?.points!=null?"PRESENT":"";return <td key={item.id}><select className="form-select form-select-sm attendance-mark" aria-label={`${enrollment.studentName} ${item.title}`} value={value} onChange={event=>saveScore(enrollment.id,item.id,"",event.target.value||null)} disabled={busy||detail.gradeStatus==="VERIFIED"}><option value="">Not marked</option><option value="PRESENT">Present</option><option value="ABSENT">Absent</option><option value="EXCUSED">Excused</option></select></td>})}</tr>})}</tbody></table></div> : <div className="inline-empty">No attendance sessions yet. Add a day that matches this class schedule to start recording attendance.</div>}
             <div className="scorebook-legend"><span><b>Danger indicator</b> appears when absences exceed 20% of non-excused class days.</span><span>To change a class schedule, edit the subject details before recording sessions.</span></div>
           </section>}
-          {classSection === "record" && <section id="class-section-record" className="surface gradebook-card scorebook-section"><div className="section-heading"><div><span className="eyebrow">ELECTRONIC CLASS RECORD</span><h2>Record scores</h2><p className="muted">Enter scores by student and assessment. Each category now includes an Equivalent (%) subtotal and an Earned Weight (% of course) subtotal, like a spreadsheet grading record. Changes save when you leave a field. Pending work is not treated as zero.</p></div><div className="scorebook-toolbar"><span className="gradebook-count">{filteredEnrollments.length} of {detail.enrollments.length} students · {detail.assessments.length} items</span><label className="scorebook-contribution-toggle"><input type="checkbox" className="form-check-input" checked={showWeightBreakdown} onChange={event=>setShowWeightBreakdown(event.target.checked)} />Detailed breakdown row</label><button className="btn btn-outline-primary btn-sm" onClick={()=>downloadScoreCsv(true)} disabled={!scorebookAssessments.length}>Download template</button><button className="btn btn-outline-primary btn-sm" onClick={()=>{setBulkScoresOpen(true);setBulkErrors([]);setBulkRowsPreview([]);setBulkOperations([])}} disabled={!scorebookAssessments.length||detail.gradeStatus==="VERIFIED"}>Import scores</button><button className="btn btn-outline-secondary btn-sm" onClick={()=>downloadScoreCsv(false)} disabled={!scorebookAssessments.length}>Export scores</button></div></div>
+          {classSection === "record" && <section id="class-section-record" className="surface gradebook-card scorebook-section" ref={scorebookRegionRef}><div className="section-heading"><div><span className="eyebrow">ELECTRONIC CLASS RECORD</span><h2>Record scores</h2><p className="muted">Enter scores by student and assessment. Each category now includes an Equivalent (%) subtotal and an Earned Weight (% of course) subtotal, like a spreadsheet grading record. Changes save when you leave a field. Pending work is not treated as zero.</p></div><div className="scorebook-toolbar"><span className="gradebook-count">{filteredEnrollments.length} of {detail.enrollments.length} students · {detail.assessments.length} items</span><label className="scorebook-contribution-toggle"><input type="checkbox" className="form-check-input" checked={showWeightBreakdown} onChange={event=>setShowWeightBreakdown(event.target.checked)} />Detailed breakdown row</label><button className="btn btn-outline-primary btn-sm" onClick={()=>downloadScoreCsv(true)} disabled={!scorebookAssessments.length}>Download template</button><button className="btn btn-outline-primary btn-sm" onClick={()=>{setBulkScoresOpen(true);setBulkErrors([]);setBulkRowsPreview([]);setBulkOperations([])}} disabled={!scorebookAssessments.length||detail.gradeStatus==="VERIFIED"}>Import scores</button><button className="btn btn-outline-secondary btn-sm" onClick={()=>downloadScoreCsv(false)} disabled={!scorebookAssessments.length}>Export scores</button></div></div>
             {(err||notice)&&<div className="portal-toast-stack" aria-live="polite" aria-atomic="false">{err&&<div className="portal-toast error" role="alert"><div><b>Needs attention</b><p>{err}</p>{notificationTarget(err)&&<button className="toast-location" onClick={goToNotificationTarget}>Check {notificationTarget(err)?.label} ↗</button>}</div><button className="toast-dismiss" aria-label="Dismiss error" onClick={()=>setErr("")}>×</button></div>}{notice&&<div className="portal-toast success" role="status"><div><b>Saved</b><p>{notice}</p></div><button className="toast-dismiss" aria-label="Dismiss notification" onClick={()=>setNotice("")}>×</button></div>}</div>}
+            {scorebookAssessments.length > 0 && <div className="scorebook-fitbar" aria-label="Workbook column layout controls">
+              <div className="scorebook-fitbar-summary">
+                <b>{scorebookView === "auto" ? "Auto-fit workbook" : "Full workbook"}</b>
+                <small>{scorebookView === "auto"
+                  ? `Showing ${scorebookVisibleAssessments.length} of ${scorebookAssessments.length} assessments · all students and final grades stay visible`
+                  : `All ${scorebookAssessments.length} assessments · scroll inside the workbook for additional columns`}</small>
+              </div>
+              <div className="scorebook-fitbar-tools">
+                <label className="scorebook-fit-selector">Layout
+                  <select className="form-select form-select-sm" value={scorebookView} aria-label="Workbook column layout"
+                    onChange={event => { setScorebookView(event.target.value as "auto" | "all"); setScorebookPage(0); }}>
+                    <option value="auto">Auto-fit (recommended)</option>
+                    <option value="all">Show all (scroll)</option>
+                  </select>
+                </label>
+                {scorebookView === "auto" && scorebookPages.length > 1 && <div className="scorebook-fit-pages" aria-label="Assessment category navigation">
+                  <button type="button" className="btn btn-outline-secondary btn-sm" aria-label="Previous assessment columns"
+                    disabled={currentScorebookPage === 0} onClick={() => setScorebookPage(Math.max(0, currentScorebookPage - 1))}>‹</button>
+                  <select className="form-select form-select-sm" aria-label="Assessment column group"
+                    value={currentScorebookPage} onChange={event => setScorebookPage(Number(event.target.value))}>
+                    {scorebookPages.map((page, index) => <option value={index} key={index}>{index + 1}/{scorebookPages.length} · {page.label}</option>)}
+                  </select>
+                  <button type="button" className="btn btn-outline-secondary btn-sm" aria-label="Next assessment columns"
+                    disabled={currentScorebookPage >= scorebookPages.length - 1} onClick={() => setScorebookPage(Math.min(scorebookPages.length - 1, currentScorebookPage + 1))}>›</button>
+                </div>}
+              </div>
+            </div>}
             {scorebookAssessments.length === 0 && <div className="inline-empty">The full class roster is shown below. Add assessment items to enable score entry.</div>}
-            {filteredEnrollments.length > 0 && <div className="score-sheet-wrap"><table className="score-sheet"><colgroup><col style={{width:scorebookDisplayColumns.length ? "21%" : "39%"}}/><col style={{width:scorebookDisplayColumns.length ? "7%" : "8%"}}/>
-  {scorebookDisplayColumns.map((column, i) => <col key={`${column.category.id}-${column.kind}-${column.kind === "assessment" ? column.item.id : i}`}
-    style={{width: `${46 * (column.kind === "weight" ? 1.12 : 1) / scorebookColumnUnits}%`}} />)}
-  <col style={{width:scorebookDisplayColumns.length?"10%":"14%"}}/><col style={{width:scorebookDisplayColumns.length?"8%":"14%"}}/><col style={{width:scorebookDisplayColumns.length?"8%":"25%"}}/></colgroup><thead>
+            {filteredEnrollments.length > 0 && <div className={`score-sheet-wrap ${scorebookView === "all" ? "score-sheet-wrap-full" : "score-sheet-wrap-auto"}`}><table className="score-sheet" style={{minWidth: scorebookView === "all" ? `${scorebookTableMinWidth}px` : undefined}}><colgroup>
+  <col style={{width: `${scorebookColumnWidths.student}px`}} />
+  <col style={{width: `${scorebookColumnWidths.attendance}px`}} />
+  {scorebookDisplayColumns.map((column,i) => <col
+    key={`${column.category.id}-${column.kind}-${column.kind === "assessment" ? column.item.id : i}`}
+    style={{width: `${column.kind === "assessment" ? scorebookColumnWidths.assessment :
+      column.kind === "equivalent" ? scorebookColumnWidths.equivalent : scorebookColumnWidths.weight}px`}} />)}
+  <col style={{width: `${scorebookColumnWidths.total}px`}} />
+  <col style={{width: `${scorebookColumnWidths.final}px`}} />
+  <col style={{width: `${scorebookColumnWidths.remark}px`}} /></colgroup><thead>
   <tr>
     <th className="score-sheet-student" rowSpan={scorebookHeaderRows.rowSpan}>STUDENT</th>
     <th className="score-sheet-summary-head score-sheet-attendance-summary" rowSpan={scorebookHeaderRows.rowSpan}>ATTENDANCE %<small>Present / P + A</small></th>
