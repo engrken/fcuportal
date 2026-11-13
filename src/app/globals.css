@@ -1378,3 +1378,72 @@
 @media(max-width:760px){.topbar-right{margin-left:auto;flex-shrink:0}.topbar-right .portal-help-trigger{min-height:38px}.account-menu-trigger-copy{display:none}.account-menu-trigger{gap:4px;padding:3px 6px 3px 3px}.account-menu-avatar{width:34px;height:34px}.tenant-roster-header{align-items:flex-start}.tenant-operations-header .tenant-admin-controls{margin-left:auto}}
 @media(max-width:460px){.topbar-right .portal-help-trigger{font-size:0;padding:8px;min-width:36px;justify-content:center}.topbar-right .portal-help-trigger>span{font-size:.72rem}.account-menu-panel{width:min(310px,calc(100vw - 16px))}.tenant-roster-page{padding-left:12px!important;padding-right:12px!important}}
 @media(prefers-reduced-motion:reduce){.account-menu-panel{animation:none}.account-menu-trigger{transition:none}}
+
+/* SAGA copyright and release footer (global, aligned below all app pages). */
+body.saga-app-body{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh;margin:0}
+body.saga-app-body>.saga-app-content{width:100%;min-width:0;flex:1 0 auto}
+body.saga-app-body .portal-layout,body.saga-app-body .portal-layout .main-area,
+body.saga-app-body .auth-shell,body.saga-app-body .privacy-page,
+body.saga-app-body .tenant-operations,body.saga-app-body .tenant-roster-page{
+  min-height:calc(100vh - 76px);min-height:calc(100dvh - 76px)
+}
+.saga-site-footer{flex:none;position:relative;z-index:4;width:100%;background:#090f25;color:#f5f8ff;
+  border-top:1px solid rgba(177,197,239,.13);box-sizing:border-box}
+.saga-site-footer-inner{margin:0 auto;padding:13px 22px 14px;text-align:center;max-width:1440px}
+.saga-site-footer p{margin:0}
+.saga-site-footer-title{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px;
+  font-size:.82rem;line-height:1.6;font-weight:700;color:#f5f8ff}
+.saga-site-footer-title strong{font-weight:800}
+.saga-site-footer-divider{color:#8a95ad;margin:0 2px}
+.saga-site-footer-title a{color:#f5f8ff;text-decoration:none;text-underline-offset:3px}
+.saga-site-footer-title a:hover,.saga-site-footer-title a:focus-visible{color:#83d5ff;text-decoration:underline}
+.saga-site-footer-build{color:#a9b7d0;font-size:.71rem;font-weight:500;white-space:nowrap}
+.saga-site-footer-meta{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;column-gap:5px;row-gap:0;
+  margin-top:2px!important;color:#37c4fa;font-size:.74rem;line-height:1.7}
+.saga-site-footer-meta strong{color:#37c4fa;font-weight:700}
+.saga-site-footer-meta a{color:#aabbd6;text-decoration:underline;text-decoration-color:#7184a4;text-underline-offset:3px}
+.saga-site-footer-meta a:hover,.saga-site-footer-meta a:focus-visible{color:#fff;text-decoration-color:#fff}
+.saga-site-footer a:focus-visible{outline:2px solid #7ad7ff;outline-offset:3px;border-radius:3px}
+.saga-site-footer-dot{color:#8cacc6}
+body.saga-app-body:has(.portal-layout)>.saga-site-footer{padding-left:248px}
+body.saga-app-body:has(.portal-layout.sidebar-collapsed)>.saga-site-footer{padding-left:76px}
+
+/* Version history. Keep release notes readable on small screens and in dark mode. */
+.saga-updates-page{min-height:calc(100dvh - 76px);background:#f6f8fc;padding:36px 20px 65px}
+.saga-updates-content{max-width:880px;margin:0 auto}
+.saga-updates-back a{font-size:.8rem;text-decoration:none;font-weight:700}
+.saga-updates-header{padding:36px 0 23px}
+.saga-updates-header .eyebrow{display:block;color:#3368ba;margin-bottom:8px}
+.saga-updates-header h1{font-size:clamp(1.65rem,4vw,2.65rem);font-weight:850;color:#14294b;letter-spacing:-.04em}
+.saga-updates-header>p{margin:11px 0;color:#5d718a;font-size:.91rem}
+.saga-updates-current{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-top:21px}
+.saga-updates-current strong{display:inline-block;padding:8px 13px;border:1px solid #cbdcfa;border-radius:9px;
+  background:#eaf2ff;color:#285aab;font-size:.76rem}
+.saga-updates-current span{color:#6c7f98;font-size:.72rem}
+.saga-updates-history{display:grid;gap:17px}
+.saga-updates-release{padding:24px;background:#fff;border:1px solid #e1e8f2;border-radius:15px;box-shadow:0 5px 17px rgba(21,48,80,.04)}
+.saga-updates-release-header{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px;
+  padding-bottom:14px;border-bottom:1px solid #edf0f5}
+.saga-updates-release-kind{color:#3b74c7;font-size:.66rem;font-weight:850;text-transform:uppercase;letter-spacing:.07em}
+.saga-updates-release-header h2{color:#1c365e;font-size:1.15rem;font-weight:800;margin:5px 0 0}
+.saga-updates-release-header time{font-size:.73rem;color:#7788a0}
+.saga-updates-release ul{padding:17px 0 0 21px;margin:0;display:grid;gap:10px;color:#495e78;font-size:.81rem;line-height:1.6}
+.saga-updates-tip{margin:18px 4px 0;color:#657892;font-size:.73rem;line-height:1.6}
+@media(max-width:1100px) and (min-width:761px){
+  body.saga-app-body:has(.portal-layout):not(:has(.portal-layout.sidebar-collapsed))>.saga-site-footer{padding-left:220px}
+}
+@media(max-width:760px){
+  body.saga-app-body:has(.portal-layout)>.saga-site-footer{padding-left:0!important}
+  body.saga-app-body .auth-panel{min-height:calc(100dvh - 76px)}
+  .saga-site-footer-inner{padding:12px 13px 14px}
+  .saga-site-footer-title{font-size:.75rem}
+  .saga-site-footer-meta{font-size:.69rem}
+  .saga-site-footer-build{font-size:.66rem}
+  .saga-updates-page{padding:23px 14px 50px}
+  .saga-updates-header{padding:25px 0 17px}
+  .saga-updates-release{padding:16px}
+}
+@media print{
+  .saga-site-footer{display:none!important}
+  body.saga-app-body,body.saga-app-body>.saga-app-content{display:block!important;min-height:0!important}
+}
