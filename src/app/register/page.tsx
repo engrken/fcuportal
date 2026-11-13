@@ -14,6 +14,7 @@ export default function RegisterPage() {
   const [schoolName, setSchoolName] = useState("");
   const [teacherSchoolChoice, setTeacherSchoolChoice] = useState("");
   const [studentNumber, setStudentNumber] = useState("");
+  const [facultyId, setFacultyId] = useState("");
   const [email, setEmail] = useState("");
 
   useEffect(() => {
@@ -56,6 +57,7 @@ export default function RegisterPage() {
           email: form.get("email"),
           password: form.get("password"),
           studentNumber: form.get("studentNumber") || undefined,
+          facultyId: role === "TEACHER" ? facultyId : undefined,
           inviteCode: form.get("inviteCode") || undefined,
           role,
           challengeId: challengeId || undefined,
@@ -79,7 +81,7 @@ export default function RegisterPage() {
 
   const canSubmit = !busy && (role === "STUDENT"
     ? !!schoolId
-    : teacherCreatingSchool ? schoolName.trim().length >= 2 : !!teacherSchoolChoice);
+    : (teacherCreatingSchool ? schoolName.trim().length >= 2 : !!teacherSchoolChoice) && facultyId.trim().length >= 3);
   const selectedSchoolId = role === "STUDENT" ? schoolId : teacherCreatingSchool ? "" : teacherSchoolChoice;
   const privacyHref = selectedSchoolId ? `/privacy?schoolId=${encodeURIComponent(selectedSchoolId)}` : "/privacy";
   const termsHref = selectedSchoolId ? `/terms?schoolId=${encodeURIComponent(selectedSchoolId)}` : "/terms";
@@ -101,7 +103,13 @@ export default function RegisterPage() {
               autoComplete="organization" required maxLength={160} minLength={2}/>
             <div className="form-text mb-3">A new school is created only after your email verification succeeds. Use the official name to avoid duplicate schools.</div>
           </> : <div className="form-text mb-3">Select your existing school to join its workspace. Additional teacher accounts depend on the school's plan. If your school is missing, select “Not listed” above.</div>}
-          <label className="form-label" htmlFor="fullName">Full name</label><input className="form-control mb-3" id="fullName" name="fullName" required maxLength={120}/><label className="form-label" htmlFor="inviteCode">Teacher invitation code</label><input className="form-control mb-3" id="inviteCode" name="inviteCode" required/></>}
+          <label className="form-label" htmlFor="fullName">Full name</label><input className="form-control mb-3" id="fullName" name="fullName" required maxLength={120}/><label className="form-label" htmlFor="facultyId">Faculty ID</label>
+            <input className="form-control mb-2" id="facultyId" name="facultyId" type="text"
+              autoComplete="off" placeholder="e.g., FAC-2026-001" value={facultyId}
+              onChange={event => { setFacultyId(event.target.value); setChallengeId(""); setError(""); }}
+              required minLength={3} maxLength={40} pattern="[A-Za-z0-9][A-Za-z0-9._/-]{2,39}"/>
+            <div className="form-text mb-3">Use the Faculty ID assigned by your school (3–40 letters, numbers, hyphens, dots, underscores, or slashes). It must be unique within your school.</div>
+            <label className="form-label" htmlFor="inviteCode">Teacher invitation code</label><input className="form-control mb-3" id="inviteCode" name="inviteCode" required/></>}
         <label className="form-label" htmlFor="regEmail">Email address</label><input className="form-control mb-3" id="regEmail" name="email" type="email" autoComplete="email" placeholder="name@example.com" value={email} onChange={event=>{setEmail(event.target.value);setChallengeId("");setError("");}} required maxLength={200}/>
         <label className="form-label" htmlFor="regPassword">Password</label><input className="form-control" id="regPassword" name="password" type="password" minLength={12} required autoComplete="new-password"/><div className="form-text mb-3">Use at least 12 characters.</div>
         <div className="form-check mb-2"><input className="form-check-input" type="checkbox" id="termsOfService" name="termsOfService" required/><label className="form-check-label small" htmlFor="termsOfService">I agree to the <Link href={termsHref} target="_blank" rel="noreferrer">Terms of Service</Link>.</label></div>
