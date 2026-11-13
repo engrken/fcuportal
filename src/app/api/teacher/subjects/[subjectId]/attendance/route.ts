@@ -24,6 +24,54 @@ const marksSchema = z.object({
 });
 
 /**
+ * Lightweight attendance workspace: avoid fetching every assessment score,
+ * grade history, and calculating every final grade just to open attendance.
+ * The full class record is loaded when another workspace tab is selected.
+ */
+export async function GET(_request: Request, context: Context) {
+  const teacher = await requireRole("TEACHER");
+  if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { subjectId } = await context.params;
+  const subject = await prisma.subject.findFirst({
+    where: { id: subjectId, teacherId: teacher.id, schoolId: teacher.schoolId },
+    select: {
+      id: true, schoolId: true, teacherId: true, code: true, classId: true,
+      title: true, term: true, academicYear: true, schedule: true, courseYear: true,
+      isPublished: true, gradeStatus: true, submittedAt: true, verifiedAt: true,
+      categories: {
+        orderBy: { sortOrder: "asc" },
+        select: { id: true, parentId: true, name: true, weight: true, conversionBase: true, sortOrder: true }
+      },
+      gradeBands: { select: { id: true, minPercent: true, finalGrade: true, remarks: true, sortOrder: true } },
+      assessments: {
+        where: { title: { startsWith: "Attendance ·" } },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, categoryId: true, title: true, maxScore: true, weight: true,
+          dueDate: true, scheduleOverrideReason: true, attendanceType: true }
+      },
+      enrollments: {
+        orderBy: { studentName: "asc" },
+        select: {
+          id: true, studentName: true, studentNumber: true, studentUserId: true,
+          remarks: true, finalGradeOverride: true,
+          scores: {
+            where: { assessment: { subjectId, title: { startsWith: "Attendance ·" } } },
+            select: { assessmentId: true, points: true, remark: true }
+          }
+        }
+      }
+    }
+  });
+  if (!subject) return NextResponse.json({ error: "Class not found." }, { status: 404 });
+  return NextResponse.json({
+    subject: {
+      ...subject,
+      enrollments: subject.enrollments.map(enrollment => ({ ...enrollment, finalPercent: null }))
+    }
+  }, { headers: { "Cache-Control": "private, no-store" } });
+}
+
+/**
  * Fast path for adding a meeting: fetch only the identifiers needed to seed
  * attendance, never the complete gradebook or grade-change history.
  */
