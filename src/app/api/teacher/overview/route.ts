@@ -37,7 +37,7 @@ export async function GET(request: Request) {
   const today = new Date(`${manilaDate}T00:00:00.000Z`);
   const subjectScope = { teacherId: teacher.id, schoolId: teacher.schoolId };
 
-  const [subjects, upcomingAttendance, upcomingAssessments] = await Promise.all([
+  const [subjects, upcomingAttendance, upcomingAssessments, attendanceCounts] = await Promise.all([
     prisma.subject.findMany({
       where: subjectScope,
       select: {
@@ -47,8 +47,7 @@ export async function GET(request: Request) {
           where: { dueDate: { gte: from, lt: rangeEnd } },
           select: {
             id: true, title: true, dueDate: true,
-            category: { select: { name: true } },
-            scores: { select: { points: true, remark: true } }
+            category: { select: { name: true } }
           }
         }
       }
@@ -56,21 +55,28 @@ export async function GET(request: Request) {
     prisma.assessment.findMany({
       where: { subject: subjectScope, title: { startsWith: "Attendance ·" }, dueDate: { gte: today } },
       orderBy: { dueDate: "asc" }, take: 8,
-      select: { id: true, title: true, dueDate: true, attendanceType: true, scheduleOverrideReason: true, scores: { select: { remark: true } }, subject: { select: { id: true, code: true, title: true, _count: { select: { enrollments: true } } } } }
+      select: { id: true, title: true, dueDate: true, attendanceType: true, scheduleOverrideReason: true, _count: { select: { scores: { where: { remark: { in: ["PRESENT", "ABSENT", "EXCUSED"] } } } } }, subject: { select: { id: true, code: true, title: true, _count: { select: { enrollments: true } } } } }
     }),
     prisma.assessment.findMany({
       where: { subject: subjectScope, NOT: { title: { startsWith: "Attendance ·" } }, dueDate: { gte: today } },
       orderBy: { dueDate: "asc" }, take: 8,
-      select: { id: true, title: true, dueDate: true, attendanceType: true, scheduleOverrideReason: true, scores: { select: { remark: true } }, subject: { select: { id: true, code: true, title: true, _count: { select: { enrollments: true } } } } }
+      select: { id: true, title: true, dueDate: true, attendanceType: true, scheduleOverrideReason: true, _count: { select: { scores: { where: { remark: { in: ["PRESENT", "ABSENT", "EXCUSED"] } } } } }, subject: { select: { id: true, code: true, title: true, _count: { select: { enrollments: true } } } } }
+    })
+    ,
+    prisma.score.groupBy({
+      by: ["remark"],
+      where: { assessment: { subject: subjectScope, title: { startsWith: "Attendance ·" }, dueDate: { gte: from, lt: rangeEnd } } },
+      _count: { _all: true }
     })
   ]);
 
   const students = new Set<string>();
   let activities = 0;
   let tests = 0;
-  let present = 0;
-  let absent = 0;
-  let excused = 0;
+  const attendanceByRemark = new Map(attendanceCounts.map(item => [item.remark, item._count._all]));
+  const present = attendanceByRemark.get("PRESENT") ?? 0;
+  const absent = attendanceByRemark.get("ABSENT") ?? 0;
+  const excused = attendanceByRemark.get("EXCUSED") ?? 0;
   for (const subject of subjects) {
     for (const enrollment of subject.enrollments) {
       const key = enrollment.studentNumber?.trim().toLocaleLowerCase() || enrollment.studentUserId || enrollment.studentName.trim().replace(/\s+/g, " ").toLocaleLowerCase();
@@ -78,14 +84,7 @@ export async function GET(request: Request) {
     }
     for (const assessment of subject.assessments) {
       const isAttendance = assessment.title.toLocaleLowerCase().startsWith("attendance ·");
-      if (isAttendance) {
-        for (const score of assessment.scores) {
-          if (score.remark === "PRESENT") present++;
-          else if (score.remark === "ABSENT") absent++;
-          else if (score.remark === "EXCUSED") excused++;
-        }
-        continue;
-      }
+      if (isAttendance) continue;
       activities++;
       if (/\b(test|exam)\b/i.test(`${assessment.title} ${assessment.category.name}`)) tests++;
     }
@@ -105,7 +104,7 @@ export async function GET(request: Request) {
     subjectTitle: item.subject.title,
     attendanceType: item.attendanceType,
     scheduleOverrideReason: item.scheduleOverrideReason,
-    markedCount: isAttendance ? item.scores.filter(score => ["PRESENT", "ABSENT", "EXCUSED"].includes(score.remark || "")).length : undefined,
+    markedCount: isAttendance ? item._count.scores : undefined,
     studentCount: isAttendance ? item.subject._count.enrollments : undefined
   }));
   const todayWeekday = today.getUTCDay();
