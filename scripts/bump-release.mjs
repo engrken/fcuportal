@@ -8,7 +8,10 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export function nextReleaseVersion(current, kind) {
   const match = /^(\d+)\.(\d+)\.(\d+)(?:-(?:beta|rc)\.(\d+))?$/.exec(current);
   if (!match) throw new Error("Expected a semantic version such as 0.2.0-beta.1.");
-  let [, major, minor, patch, beta] = match.map((part, index) => index ? Number(part) : part);
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  const patch = Number(match[3]);
+  const beta = match[4] === undefined ? undefined : Number(match[4]);
   if (kind === "fix") {
     if (beta !== undefined) return `${major}.${minor}.${patch}-beta.${beta + 1}`;
     return `${major}.${minor}.${patch + 1}-beta.1`;
