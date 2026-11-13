@@ -80,6 +80,7 @@ model User {
   fullName                String
   profileImagePath        String?
   studentNumber           String?
+  facultyId               String?
   courseProgram           String?
   yearLevel               String?
   privacyNoticeAcceptedAt DateTime?
@@ -98,6 +99,7 @@ model User {
 
   @@unique([schoolId, email])
   @@unique([schoolId, studentNumber])
+  @@unique([schoolId, facultyId])
   @@index([schoolId, role])
 }
 
