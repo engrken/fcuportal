@@ -6,6 +6,7 @@ import { createSession } from "@/lib/auth";
 import { checkAuthThrottle } from "@/lib/rate-limit";
 import { SCHOOL_PLAN_LIMITS } from "@/lib/plans";
 import { resolveTeacherSchoolTarget } from "@/lib/teacher-school-registration";
+import { normalizeFacultyId } from "@/lib/account-identifiers";
 import type { School } from "@/generated/prisma/client";
 import { consumeEmailChallenge, emailVerificationFields, issueEmailChallenge } from "@/lib/email-verification";
 
@@ -13,7 +14,7 @@ const bodySchema = z.object({
   schoolId: z.string().min(1).optional(), schoolName: z.string().trim().min(2).max(160).optional(),
   fullName: z.string().trim().min(2).max(120).optional(), email: z.string().trim().email().max(200),
   password: z.string().min(12).max(100), role: z.enum(["TEACHER", "STUDENT"]),
-  studentNumber: z.string().trim().max(40).optional(), inviteCode: z.string().optional(), acknowledgedPrivacyNotice: z.literal(true),
+  studentNumber: z.string().trim().max(40).optional(), facultyId: z.string().trim().max(40).optional(), inviteCode: z.string().optional(), acknowledgedPrivacyNotice: z.literal(true),
   acknowledgedTerms: z.literal(true), termsVersion: z.literal("2026-11-12"),
   ...emailVerificationFields
 });
@@ -38,8 +39,10 @@ export async function POST(request: Request) {
       }
       return NextResponse.json({ error: "Check the required fields. Passwords must be at least 12 characters." }, { status: 400 });
     }
-    const { schoolId, schoolName, fullName, email, password, role, studentNumber, inviteCode, termsVersion, challengeId, code } = parsed.data;
+    const { schoolId, schoolName, fullName, email, password, role, studentNumber, facultyId, inviteCode, termsVersion, challengeId, code } = parsed.data;
     const normalizedEmail = email.toLowerCase();
+    const normalizedFacultyId = role === "TEACHER" ? normalizeFacultyId(facultyId || "") : null;
+    if (role === "TEACHER" && !normalizedFacultyId) return NextResponse.json({ error: "Enter a valid Faculty ID (3–40 letters, numbers or . _ / -)." }, { status: 400 });
     const teacherSchoolTarget = role === "TEACHER" ? resolveTeacherSchoolTarget(schoolId, schoolName) : null;
     if (Boolean(challengeId) !== Boolean(code)) return NextResponse.json({ error: "Request a code and enter all six digits." }, { status: 400 });
     const phase = challengeId ? "verify" : "send";
@@ -63,6 +66,11 @@ export async function POST(request: Request) {
         });
         if (!selectedSchool) return NextResponse.json({ error: "School not found. Refresh the list and select a school." }, { status: 404 });
         if (!selectedSchool.isActive) return NextResponse.json({ error: "This school workspace is inactive. Contact SAGA support." }, { status: 403 });
+        const existingFaculty = await prisma.user.findFirst({
+          where: { schoolId: teacherSchoolTarget.schoolId, facultyId: normalizedFacultyId },
+          select: { id: true }
+        });
+        if (existingFaculty) return NextResponse.json({ error: "This Faculty ID is already registered at your school." }, { status: 409 });
       } else {
         const alreadyListed = await prisma.school.findFirst({
           where: { name: { equals: teacherSchoolTarget.schoolName, mode: "insensitive" } },
@@ -91,7 +99,7 @@ export async function POST(request: Request) {
       "register", role,
       teacherSchoolTarget?.kind === "existing" ? teacherSchoolTarget.schoolId : role === "STUDENT" ? schoolId || "" : "",
       teacherSchoolTarget?.kind === "new" ? teacherSchoolTarget.schoolName.toLowerCase() : "",
-      normalizedStudentNumber || "", normalizedEmail
+      normalizedStudentNumber || "", normalizedEmail, normalizedFacultyId || ""
     ];
     if (!challengeId || !code) {
       const id = await issueEmailChallenge(binding, normalizedEmail);
@@ -127,6 +135,11 @@ export async function POST(request: Request) {
           });
         }
         if (!school) throw new Error("SCHOOL_NOT_READY");
+        const existingFaculty = await tx.user.findFirst({
+          where: { schoolId: school.id, facultyId: normalizedFacultyId },
+          select: { id: true }
+        });
+        if (existingFaculty) throw new Error("FACULTY_ID_TAKEN");
         const teacherCount = await tx.user.count({ where: { schoolId: school.id, role: "TEACHER" } });
         const limits = SCHOOL_PLAN_LIMITS[school.plan];
         if (teacherCount >= limits.teachers) throw new Error(`PLAN_LIMIT_TEACHERS:${limits.teachers}`);
@@ -140,7 +153,7 @@ export async function POST(request: Request) {
         if (!school) throw new Error("SCHOOL_NOT_READY");
       }
       if (!school) throw new Error("SCHOOL_NOT_READY");
-      const created = await tx.user.create({ data: { schoolId: school.id, fullName: studentProfile?.fullName ?? fullName!, email: normalizedEmail, emailVerifiedAt: new Date(), passwordHash, role, studentNumber: role === "STUDENT" ? studentProfile?.studentNumber : null, courseProgram: studentProfile?.courseProgram ?? null, yearLevel: studentProfile?.yearLevel ?? null, privacyNoticeAcceptedAt: new Date(), termsAcceptedAt: new Date(), termsOfServiceVersion: termsVersion }, select: { id: true, role: true, schoolId: true } });
+      const created = await tx.user.create({ data: { schoolId: school.id, fullName: studentProfile?.fullName ?? fullName!, email: normalizedEmail, emailVerifiedAt: new Date(), passwordHash, role, studentNumber: role === "STUDENT" ? studentProfile?.studentNumber : null, facultyId: role === "TEACHER" ? normalizedFacultyId : null, courseProgram: studentProfile?.courseProgram ?? null, yearLevel: studentProfile?.yearLevel ?? null, privacyNoticeAcceptedAt: new Date(), termsAcceptedAt: new Date(), termsOfServiceVersion: termsVersion }, select: { id: true, role: true, schoolId: true } });
       if (studentProfile) await tx.enrollment.updateMany({ where: { studentNumber: studentProfile.studentNumber, studentUserId: null, subject: { schoolId: school.id } }, data: { studentUserId: created.id } });
       return created;
     });
@@ -150,6 +163,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("PLAN_LIMIT_TEACHERS:")) return NextResponse.json({ error: `This school has reached its teacher limit (${error.message.split(":")[1]}). Contact SAGA to upgrade the school plan.` }, { status: 402 });
     if (error instanceof Error && error.message === "SCHOOL_INACTIVE") return NextResponse.json({ error: "This school workspace is currently inactive. Contact SAGA support to restore access." }, { status: 403 });
+    if (error instanceof Error && error.message === "FACULTY_ID_TAKEN") return NextResponse.json({ error: "This Faculty ID is already registered at your school. Please use a different ID." }, { status: 409 });
     if (error instanceof Error && error.message === "SCHOOL_NOT_FOUND") return NextResponse.json({ error: "School not found. Refresh the school list and try again." }, { status: 404 });
     if (error instanceof Error && error.message === "SCHOOL_ALREADY_EXISTS") return NextResponse.json({ error: "This school already exists. Select it from the dropdown instead of creating a duplicate." }, { status: 409 });
     if (error instanceof Error && error.message === "STUDENT_EMAIL_CHANGED") return NextResponse.json({ error: "Your school roster email changed. Check it with your school and start registration again." }, { status: 409 });
