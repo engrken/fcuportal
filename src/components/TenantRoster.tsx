@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Fragment, useEffect, useState, type FormEvent } from "react";
+import AccountMenu, { type AccountTheme } from "./AccountMenu";
 
 const statusLabels = {
   VERIFIED: "Verified",
@@ -23,7 +24,10 @@ type RosterEntry = {
   protected?: boolean;
 };
 
-export default function TenantRoster({ school, schools, roster }: { school: School; schools: School[]; roster: "students" | "teachers" }) {
+export default function TenantRoster({ school, schools, roster, managerName, managerEmail, managerSchoolSlug, managerProfileImagePath }: {
+  school: School; schools: School[]; roster: "students" | "teachers";
+  managerName: string; managerEmail: string; managerSchoolSlug: string; managerProfileImagePath: string | null;
+}) {
   const router = useRouter();
   const isStudentRoster = roster === "students";
   const heading = isStudentRoster ? "Student roster" : "Teacher roster";
@@ -40,6 +44,21 @@ export default function TenantRoster({ school, schools, roster }: { school: Scho
   const [saveError, setSaveError] = useState("");
   const [notice, setNotice] = useState("");
   const [revision, setRevision] = useState(0);
+  const [theme, setTheme] = useState<AccountTheme>("light");
+  useEffect(() => {
+    const saved = window.localStorage.getItem("saga-portal-theme");
+    if (saved === "dark" || saved === "light") setTheme(saved);
+  }, []);
+  function setAppearance(next: AccountTheme) {
+    window.localStorage.setItem("saga-portal-theme", next);
+    setTheme(next);
+  }
+  async function logout() {
+    const response = await fetch("/api/auth/logout", { method: "POST" });
+    if (!response.ok) throw new Error("Could not sign out.");
+    router.replace("/login");
+    router.refresh();
+  }
 
   useEffect(() => {
     const controller = new AbortController();
@@ -104,10 +123,24 @@ export default function TenantRoster({ school, schools, roster }: { school: Scho
   }
 
   return (
-    <main className="container py-4">
-      <Link href="/manage" className="small text-decoration-none">← Tenant management</Link>
-      <h1 className="h2 fw-bold mt-3 mb-1">{heading}</h1>
-      <p className="text-secondary mb-4">{school.name}</p>
+    <main className="tenant-roster-page container py-4" data-bs-theme={theme}>
+      <header className="tenant-roster-header mb-4">
+        <div><Link href="/manage" className="small text-decoration-none">← Tenant management</Link>
+          <h1 className="h2 fw-bold mt-3 mb-1">{heading}</h1>
+          <p className="text-secondary mb-0">{school.name}</p>
+        </div>
+        <AccountMenu
+          fullName={managerName}
+          email={managerEmail}
+          role="Teacher"
+          profileImagePath={managerProfileImagePath}
+          theme={theme}
+          onThemeChange={setAppearance}
+          onEditProfile={() => router.push(`/${encodeURIComponent(managerSchoolSlug)}/profile`)}
+          onLogout={logout}
+          onTenantDashboard={() => router.push("/manage")}
+        />
+      </header>
 
       <section className="surface p-3 p-lg-4" aria-label={heading}>
         <div className="mb-3">
