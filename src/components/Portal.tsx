@@ -460,6 +460,8 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   const [studentGradeQuery, setStudentGradeQuery] = useState(""); const [studentYearFilter, setStudentYearFilter] = useState("All School Years"); const [studentTermFilter, setStudentTermFilter] = useState("All Terms");
   const [studentGradeDetails, setStudentGradeDetails] = useState<Record<string, Grade>>({});
   const studentGradeRequests = useRef<Map<string, Promise<Grade | null>>>(new Map());
+  const studentGradeGenerationRef = useRef(0);
+  const [studentGradeRevision, setStudentGradeRevision] = useState(0);
   const [studentGradeLoading, setStudentGradeLoading] = useState<Record<string, boolean>>({});
   const [studentGradeErrors, setStudentGradeErrors] = useState<Record<string, string>>({});
   const [studentRefreshing, setStudentRefreshing] = useState(false);
@@ -625,7 +627,10 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     const data = await api("/api/student/grades?view=summary");
     setGrades(data.grades as Grade[]);
     setStudentLastUpdated(new Date());
+    studentGradeGenerationRef.current++;
+    setStudentGradeRevision(value => value + 1);
     setStudentGradeDetails({});
+    setStudentGradeLoading({});
     setStudentGradeErrors({});
     studentGradeRequests.current.clear();
   }
@@ -644,22 +649,29 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     if (studentGradeDetails[id]) return studentGradeDetails[id];
     const pending = studentGradeRequests.current.get(id);
     if (pending) return pending;
+    const generation = studentGradeGenerationRef.current;
     setStudentGradeErrors(current => ({ ...current, [id]: "" }));
     setStudentGradeLoading(current => ({ ...current, [id]: true }));
     const task = (async (): Promise<Grade | null> => {
       try {
         const data = await api(`/api/student/grades?enrollmentId=${encodeURIComponent(id)}`);
         const grade = data.grade as Grade;
-        setStudentGradeDetails(current => ({ ...current, [id]: grade }));
+        if (studentGradeGenerationRef.current === generation) {
+          setStudentGradeDetails(current => ({ ...current, [id]: grade }));
+        }
         return grade;
       } catch (error) {
-        setStudentGradeErrors(current => ({
-          ...current, [id]: error instanceof Error ? error.message : "Could not load assessment details."
-        }));
+        if (studentGradeGenerationRef.current === generation) {
+          setStudentGradeErrors(current => ({
+            ...current, [id]: error instanceof Error ? error.message : "Could not load assessment details."
+          }));
+        }
         return null;
       } finally {
-        studentGradeRequests.current.delete(id);
-        setStudentGradeLoading(current => ({ ...current, [id]: false }));
+        if (studentGradeGenerationRef.current === generation) {
+          studentGradeRequests.current.delete(id);
+          setStudentGradeLoading(current => ({ ...current, [id]: false }));
+        }
       }
     })();
     studentGradeRequests.current.set(id, task);
@@ -1600,7 +1612,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
                   <b className="grade-percent">{g.percent === null ? "No score yet" : `${g.percent.toFixed(2)}% course`}</b>
                 </div>
                 <div className="student-grade-actions"><button type="button" className="btn btn-outline-primary btn-sm" onClick={() => startStudentSimulation(g.id)}>Try What-If</button></div>
-                <details className="student-itemized student-itemized-on-demand" onToggle={event => {
+                <details key={`${g.id}-${studentGradeRevision}`} className="student-itemized student-itemized-on-demand" onToggle={event => {
                   if (event.currentTarget.open) void ensureStudentGradeDetail(g.id);
                 }}>
                   <summary><span>View itemized scores</span><small>{total} assessment{total === 1 ? "" : "s"} · {Math.max(0, total - recorded)} unrecorded</small></summary>
