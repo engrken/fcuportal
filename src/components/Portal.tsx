@@ -8,6 +8,7 @@ import GradeContributionPanel from "./GradeContributionPanel";
 import { HelpCenter, OnboardingGuide } from "./PortalGuides";
 import { PhilippineHolidayCalendar } from "./PhilippineHolidayCalendar";
 import { calculateCategoryPercent, calculateFinal, convertRawPercent } from "@/lib/grades";
+import { classWorkspaceHref, resolveClassSelection, type ClassSection } from "@/lib/class-navigation";
 import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
 
 type User = { id: string; role: string; fullName: string; email: string; isTenantManager?: boolean; emailDeliveryEnabled?: boolean; profileImagePath: string | null; studentNumber: string | null; courseProgram?: string | null; yearLevel?: string | null; school: { id: string; slug: string; name: string; shortName: string; portalTitle: string; logoText: string; logoPath: string | null; primaryColor: string } };
@@ -352,16 +353,23 @@ function effectiveCategoryWeight(category: Category, categories: Category[]) {
   }
   return category.id === root.id ? root.weight : root.weight * category.weight / 100;
 }
-export default function Portal({ user, initialPage = "overview" }: { user: User; initialPage?: "overview" | "classes" | "profile" }) {
+export default function Portal({ user, initialPage = "overview", initialClassId = "", initialClassSection = "setup", initialClassStudent = "", initialAttendanceToday = false }: {
+  user: User;
+  initialPage?: "overview" | "classes" | "profile";
+  initialClassId?: string;
+  initialClassSection?: ClassSection;
+  initialClassStudent?: string;
+  initialAttendanceToday?: boolean;
+}) {
   const router = useRouter(); const teacher = user.role === "TEACHER"; const onboardingStorageKey = "saga-onboarding-complete:" + user.id;
-  const [tab, setTab] = useState(initialPage); const [classSection, setClassSection] = useState("setup"); const [subjects, setSubjects] = useState<Subject[]>([]); const [activeId, setActiveId] = useState(""); const [detail, setDetail] = useState<Detail | null>(null); const [grades, setGrades] = useState<Grade[]>([]); const [busy, setBusy] = useState(false); const [loading, setLoading] = useState(true); const [loadingDetail, setLoadingDetail] = useState(false); const [notice, setNotice] = useState(""); const [err, setErr] = useState("");
+  const [tab, setTab] = useState(initialPage); const [classSection, setClassSection] = useState<ClassSection>(initialClassSection); const [subjects, setSubjects] = useState<Subject[]>([]); const [activeId, setActiveId] = useState(initialClassId); const [detail, setDetail] = useState<Detail | null>(null); const [grades, setGrades] = useState<Grade[]>([]); const [busy, setBusy] = useState(false); const [loading, setLoading] = useState(true); const [loadingDetail, setLoadingDetail] = useState(false); const [notice, setNotice] = useState(""); const [err, setErr] = useState("");
   const [createOpen, setCreateOpen] = useState(false); const [editOpen, setEditOpen] = useState(false); const [editDetails, setEditDetails] = useState({ classId: "", code: "", title: "", term: "1st Semester", academicYear: "", courseYear: "" }); const [editScheduleRows, setEditScheduleRows] = useState<ScheduleRow[]>([]); const [rosterOpen, setRosterOpen] = useState(false); const [assessmentOpen, setAssessmentOpen] = useState(false); const [attendanceOpen, setAttendanceOpen] = useState(false); const [attendanceDate, setAttendanceDate] = useState(todayDateInput); const [attendanceType, setAttendanceType] = useState<"FACE_TO_FACE" | "ONLINE">("FACE_TO_FACE"); const [attendanceReason, setAttendanceReason] = useState(""); const [assessmentCategoryOverrides, setAssessmentCategoryOverrides] = useState<Record<string, boolean>>({});
   const [scheduleRows, setScheduleRows] = useState<ScheduleRow[]>([]); const [copyFromId, setCopyFromId] = useState(""); const [rosterText, setRosterText] = useState(""); const [rosterFileName, setRosterFileName] = useState(""); const [categoryName, setCategoryName] = useState(""); const [categoryParent, setCategoryParent] = useState(""); const [categoryWeight, setCategoryWeight] = useState("50"); const [categoryOpen, setCategoryOpen] = useState(false);
   const [lectureCourseWeight, setLectureCourseWeight] = useState("60"); const [laboratoryCourseWeight, setLaboratoryCourseWeight] = useState("40");
   const [gradingSetupType, setGradingSetupType] = useState<"SINGLE" | "COMBINED">("SINGLE"); const [singleGroupType, setSingleGroupType] = useState<"LECTURE" | "LABORATORY">("LECTURE");
   const [theme, setTheme] = useState<"light" | "dark">("light"); const [schoolYearFilter, setSchoolYearFilter] = useState("All School Years"); const [termFilter, setTermFilter] = useState("All Terms"); const [rosterEdit, setRosterEdit] = useState<{ id: string; studentName: string; studentNumber: string } | null>(null); const [printMode, setPrintMode] = useState<"roster" | "grades" | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false); const [classNavOpen, setClassNavOpen] = useState(false); const [onboardingOpen, setOnboardingOpen] = useState(false); const [helpOpen, setHelpOpen] = useState(false); const [helpInitialTab, setHelpInitialTab] = useState<"quick" | "faq" | "student" | "faculty">("quick"); const [subjectPage, setSubjectPage] = useState(1); const [classPage, setClassPage] = useState(1); const [rosterPage, setRosterPage] = useState(1);
-  const [studentLookupQuery, setStudentLookupQuery] = useState(""); const [studentLookupMatches, setStudentLookupMatches] = useState<StudentSearchMatch[]>([]); const [studentLookupBusy, setStudentLookupBusy] = useState(false); const [classStudentFilter, setClassStudentFilter] = useState("");
+  const [studentLookupQuery, setStudentLookupQuery] = useState(""); const [studentLookupMatches, setStudentLookupMatches] = useState<StudentSearchMatch[]>([]); const [studentLookupBusy, setStudentLookupBusy] = useState(false); const [classStudentFilter, setClassStudentFilter] = useState(initialClassStudent);
   const [studentGradeQuery, setStudentGradeQuery] = useState(""); const [studentYearFilter, setStudentYearFilter] = useState("All School Years"); const [studentTermFilter, setStudentTermFilter] = useState("All Terms");
   const [profileName, setProfileName] = useState(user.fullName); const [passwordCurrent, setPasswordCurrent] = useState(""); const [passwordNew, setPasswordNew] = useState(""); const [passwordConfirm, setPasswordConfirm] = useState(""); const [passwordOtp, setPasswordOtp] = useState(""); const [passwordOtpSent, setPasswordOtpSent] = useState(false);
   const [profileImagePath, setProfileImagePath] = useState(user.profileImagePath); const [schoolLogoPath, setSchoolLogoPath] = useState(user.school.logoPath);
@@ -369,7 +377,7 @@ export default function Portal({ user, initialPage = "overview" }: { user: User;
   const [overviewTo, setOverviewTo] = useState(todayDateInput); const [overviewFrom, setOverviewFrom] = useState(() => shiftDateInput(todayDateInput(), -29));
   const [bulkScoresOpen, setBulkScoresOpen] = useState(false); const [bulkFileName, setBulkFileName] = useState(""); const [bulkOperations, setBulkOperations] = useState<Array<{enrollmentId:string;assessmentId:string;points:number|null;remark:"EXCUSED"|"ABSENT"|"DID_NOT_SUBMIT"|null}>>([]); const [bulkRowsPreview, setBulkRowsPreview] = useState<Array<{row:number;student:string;studentNumber:string;cells:number;errors:string[]}>>([]); const [bulkErrors, setBulkErrors] = useState<string[]>([]);
   const [gradeChangeEnrollmentId, setGradeChangeEnrollmentId] = useState(""); const [gradeChangeGrade, setGradeChangeGrade] = useState("AUTO"); const [gradeChangeRemark, setGradeChangeRemark] = useState("AUTO"); const [gradeChangeReason, setGradeChangeReason] = useState("");
-  const [attendanceQuickOpenId, setAttendanceQuickOpenId] = useState("");
+  const [attendanceQuickOpenId, setAttendanceQuickOpenId] = useState(initialAttendanceToday && initialClassId ? initialClassId : "");
   const [showWeightBreakdown, setShowWeightBreakdown] = useState(true);
   const [visibilityManagerQuery, setVisibilityManagerQuery] = useState<string | null>(null);
   useEffect(() => { if (!notice && !err) return; const timer = window.setTimeout(() => { setNotice(""); setErr(""); }, err ? 20000 : 5500); return () => window.clearTimeout(timer); }, [notice, err]);
@@ -377,11 +385,51 @@ export default function Portal({ user, initialPage = "overview" }: { user: User;
   function openHelp(tab: "quick" | "faq" | "student" | "faculty" = "quick") { setHelpInitialTab(tab); setHelpOpen(true); }
   function openHelpFromTour() { closeOnboarding(); openHelp("quick"); }
   function navigatePage(page: "overview" | "classes" | "profile") {
-    if (page === "classes" && !teacher) return;
+    if (page === "classes") {
+      if (!teacher) return;
+      const id = resolveClassSelection(subjects, activeId, schoolYearFilter, termFilter);
+      const section = id === activeId ? classSection : "setup";
+      if (id) setActiveId(id);
+      if (id !== activeId) setClassSection("setup");
+      setTab("classes");
+      router.push(classWorkspaceHref(user.school.slug, id, section, undefined, subjects));
+      return;
+    }
     setTab(page);
     router.push(`/${encodeURIComponent(user.school.slug)}/${page}`);
   }
+  function openClass(subjectId: string, section: ClassSection = "setup", options: { student?: string; attendanceToday?: boolean } = {}, replace = false) {
+    const subject = subjects.find(item => item.id === subjectId);
+    if (!subject) {
+      navigatePage("classes");
+      return;
+    }
+    // When opening a class directly from the sidebar or Overview, the filters
+    // must not hide that class before its details are loaded.
+    if (schoolYearFilter !== "All School Years" && schoolYearFilter !== subject.academicYear) setSchoolYearFilter(subject.academicYear);
+    if (termFilter !== "All Terms" && termFilter !== subject.term) setTermFilter(subject.term);
+    setClassStudentFilter(options.student || "");
+    setActiveId(subjectId);
+    setClassSection(section);
+    setAttendanceQuickOpenId(options.attendanceToday ? subjectId : "");
+    setTab("classes");
+    setClassNavOpen(true);
+    const href = classWorkspaceHref(user.school.slug, subjectId, section, options, subjects);
+    if (replace) router.replace(href, { scroll: false });
+    else router.push(href);
+  }
+  function openClassSection(section: ClassSection) {
+    setClassSection(section);
+    if (activeId) router.replace(classWorkspaceHref(user.school.slug, activeId, section, classStudentFilter ? { student: classStudentFilter } : undefined, subjects), { scroll: false });
+  }
   useEffect(() => { setTab(initialPage); }, [initialPage]);
+  useEffect(() => {
+    if (!teacher || initialPage !== "classes") return;
+    setActiveId(initialClassId);
+    setClassSection(initialClassSection);
+    setClassStudentFilter(initialClassStudent);
+    if (initialAttendanceToday && initialClassId) setAttendanceQuickOpenId(initialClassId);
+  }, [teacher, initialPage, initialClassId, initialClassSection, initialClassStudent, initialAttendanceToday]);
   async function loadSubjects() { const d = await api("/api/teacher/subjects"); setSubjects(d.subjects); setOverviewRefresh(value => value + 1); }
   async function loadDetail(id = activeId) { if (!id) { setDetail(null); return; } setLoadingDetail(true); try { const d = await api(`/api/teacher/subjects/${id}`); setDetail(d.subject); } finally { setLoadingDetail(false); } }
   async function loadGrades() { const d = await api("/api/student/grades"); setGrades(d.grades); }
@@ -419,44 +467,57 @@ export default function Portal({ user, initialPage = "overview" }: { user: User;
   useEffect(() => { const saved = window.localStorage.getItem("saga-portal-theme"); if (saved === "dark" || saved === "light") setTheme(saved); }, []);
   useEffect(() => { if (window.localStorage.getItem(onboardingStorageKey) !== "done") setOnboardingOpen(true); }, [onboardingStorageKey]);
   useEffect(() => { setSidebarCollapsed(window.localStorage.getItem("saga-sidebar-collapsed") === "true"); }, []);
-  useEffect(() => { if (teacher && activeId) loadDetail(activeId).catch(e => setErr(e.message)); }, [activeId, teacher]);
+  useEffect(() => { if (teacher && tab === "classes") setClassNavOpen(true); }, [teacher, tab]);
+  useEffect(() => {
+    if (!teacher || loading || !activeId || !subjects.some(subject => subject.id === activeId)) {
+      setDetail(null);
+      return;
+    }
+    let cancelled = false;
+    setDetail(current => current?.id === activeId ? current : null);
+    setLoadingDetail(true);
+    api(`/api/teacher/subjects/${activeId}`)
+      .then(result => { if (!cancelled) setDetail(result.subject); })
+      .catch(error => { if (!cancelled) setErr(error instanceof Error ? error.message : "Could not load class records."); })
+      .finally(() => { if (!cancelled) setLoadingDetail(false); });
+    return () => { cancelled = true; };
+  }, [teacher, loading, activeId, subjects.some(subject => subject.id === activeId)]);
   useEffect(() => {
     if (!attendanceQuickOpenId || detail?.id !== attendanceQuickOpenId) return;
-    const scheduledToday = overviewData?.today;
+    const scheduledToday = overviewData?.today || todayDateInput();
     const todaySession = scheduledToday && detail.assessments.some(item => item.title.toLocaleLowerCase() === `attendance · ${scheduledToday}`.toLocaleLowerCase());
     setAttendanceQuickOpenId("");
     if (detail.gradeStatus !== "VERIFIED" && !todaySession) void addAttendanceSession(scheduledToday);
   }, [attendanceQuickOpenId, detail, overviewData?.today]);
   useEffect(() => { setCopyFromId(""); }, [activeId]);
-  useEffect(() => { if (!teacher) return; const visible = subjects.filter(subject => (schoolYearFilter === "All School Years" || subject.academicYear === schoolYearFilter) && (termFilter === "All Terms" || subject.term === termFilter)); if (activeId && !visible.some(subject => subject.id === activeId)) { setDetail(null); setActiveId(""); } }, [teacher, subjects, schoolYearFilter, termFilter, activeId]);
+  useEffect(() => {
+    if (!teacher || loading || tab !== "classes") return;
+    const selectedId = resolveClassSelection(subjects, activeId, schoolYearFilter, termFilter);
+    if (selectedId === activeId) return;
+    setActiveId(selectedId);
+    setDetail(null);
+    setClassSection("setup");
+    setClassStudentFilter("");
+    setAttendanceQuickOpenId("");
+    router.replace(classWorkspaceHref(user.school.slug, selectedId, "setup", undefined, subjects), { scroll: false });
+  }, [teacher, loading, tab, subjects, activeId, schoolYearFilter, termFilter, router, user.school.slug]);
   useEffect(() => { if (!printMode) return; const timer = window.setTimeout(() => window.print(), 120); const afterPrint = () => setPrintMode(null); window.addEventListener("afterprint", afterPrint); return () => { window.clearTimeout(timer); window.removeEventListener("afterprint", afterPrint); }; }, [printMode]);
   async function logout() { await fetch("/api/auth/logout", { method: "POST" }); router.replace("/login"); router.refresh(); }
   function toggleClassNav() {
-    navigatePage("classes");
+    if (tab !== "classes") navigatePage("classes");
     if (sidebarCollapsed) {
       setSidebarCollapsed(false);
       window.localStorage.setItem("saga-sidebar-collapsed", "false");
       setClassNavOpen(true);
       return;
     }
-    setClassNavOpen(open => !open);
+    setClassNavOpen(open => tab === "classes" ? !open : true);
   }
   function openSidebarClass(subjectId: string) {
-    setSchoolYearFilter("All School Years");
-    setTermFilter("All Terms");
-    setClassStudentFilter("");
-    setActiveId(subjectId);
-    setClassSection("setup");
-    navigatePage("classes");
-    setClassNavOpen(true);
+    openClass(subjectId, "setup");
   }
   function openStudentSearchMatch(match: StudentSearchMatch) {
-    setSchoolYearFilter(match.class.academicYear);
-    setTermFilter(match.class.term);
-    setClassStudentFilter(match.studentNumber || match.studentName);
-    setActiveId(match.class.id);
-    setClassSection("record");
-    navigatePage("classes");
+    openClass(match.class.id, "record", { student: match.studentNumber || match.studentName });
   }
   function notificationTarget(message: string) {
     const lower=message.toLocaleLowerCase();
@@ -474,7 +535,7 @@ export default function Portal({ user, initialPage = "overview" }: { user: User;
   async function run(action: () => Promise<void>, success = "Saved.") { setBusy(true); setErr(""); setNotice(""); try { await action(); setNotice(success); } catch (e) { setErr(e instanceof Error ? e.message : "Something went wrong."); } finally { setBusy(false); } }
   async function createSubject(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); const data = { ...Object.fromEntries(new FormData(e.currentTarget)), schedule: scheduleRows.length ? JSON.stringify(scheduleRows) : undefined };
-    await run(async () => { const d = await api("/api/teacher/subjects", { method: "POST", body: JSON.stringify(data) }); await loadSubjects(); setActiveId(d.subject.id); setCreateOpen(false); setScheduleRows([]); }, "Subject created. Add your class roll and assessments next.");
+    await run(async () => { const d = await api("/api/teacher/subjects", { method: "POST", body: JSON.stringify(data) }); await loadSubjects(); setActiveId(d.subject.id); setClassSection("setup"); router.replace(classWorkspaceHref(user.school.slug, d.subject.id, "setup", undefined, [...subjects, d.subject]), { scroll: false }); setCreateOpen(false); setScheduleRows([]); }, "Subject created. Add your class roll and assessments next.");
   }
   function openSubjectEditor() {
     if (!detail) return;
@@ -489,7 +550,7 @@ export default function Portal({ user, initialPage = "overview" }: { user: User;
   }
   async function deleteSubject() {
     if (!detail || !window.confirm(`Delete ${detail.code} — ${detail.title}? This permanently removes its roster, assessments, scores, attendance, and grading setup. Only draft classes can be deleted.`)) return;
-    await run(async () => { await api(`/api/teacher/subjects/${detail.id}`, { method: "PATCH", body: JSON.stringify({ deleteSubject: true }) }); setDetail(null); setActiveId(""); await loadSubjects(); }, "Class deleted.");
+    await run(async () => { await api(`/api/teacher/subjects/${detail.id}`, { method: "PATCH", body: JSON.stringify({ deleteSubject: true }) }); setDetail(null); setActiveId(""); await loadSubjects(); router.replace(classWorkspaceHref(user.school.slug), { scroll: false }); }, "Class deleted.");
   }
   async function addRoster(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); const form = e.currentTarget; const text = rosterText;
@@ -862,31 +923,31 @@ export default function Portal({ user, initialPage = "overview" }: { user: User;
   <article className="surface overview-upcoming-card">
     <h3>Upcoming attendance</h3><p>Scheduled meetings, attendance type, and recording progress.</p>
     <div className="today-attendance-shortcuts"><div className="today-attendance-heading"><b>Classes scheduled today</b><small>{overviewData.todayClasses.length ? new Date(`${overviewData.today}T00:00:00`).toLocaleDateString(undefined,{weekday:"long",month:"short",day:"numeric"}) : "Quick access for today’s class meetings"}</small></div>
-      {overviewData.todayClasses.some(item=>item.canRecordAttendance) ? <div className="today-attendance-list">{overviewData.todayClasses.filter(item=>item.canRecordAttendance).map(item=><button type="button" className="today-attendance-button" key={item.id} onClick={()=>{setSchoolYearFilter("All School Years");setTermFilter("All Terms");setActiveId(item.id);setClassSection("attendance");setAttendanceQuickOpenId(item.id);navigatePage("classes")}}><span><b>{item.classId || item.code} · {item.title}</b><small>{item.schedule.join(" · ")}</small></span><strong>Record attendance <span aria-hidden="true">→</span></strong></button>)}</div> : overviewData.todayClasses.length ? <div className="today-attendance-empty">All classes scheduled today are finalized.</div> : <div className="today-attendance-empty">No classes match a saved schedule for today.</div>}
+      {overviewData.todayClasses.some(item=>item.canRecordAttendance) ? <div className="today-attendance-list">{overviewData.todayClasses.filter(item=>item.canRecordAttendance).map(item=><button type="button" className="today-attendance-button" key={item.id} onClick={()=>openClass(item.id, "attendance", { attendanceToday: true })}><span><b>{item.classId || item.code} · {item.title}</b><small>{item.schedule.join(" · ")}</small></span><strong>Record attendance <span aria-hidden="true">→</span></strong></button>)}</div> : overviewData.todayClasses.length ? <div className="today-attendance-empty">All classes scheduled today are finalized.</div> : <div className="today-attendance-empty">No classes match a saved schedule for today.</div>}
     </div>
-    {overviewData.upcoming.attendance.length ? <ul className="overview-work-list">{overviewData.upcoming.attendance.map(item=><li key={item.id}><button type="button" className="overview-work-item attendance" onClick={()=>{setActiveId(item.subjectId);setClassSection("attendance");navigatePage("classes")}}><span className="overview-work-copy"><b>{item.title}</b><small>{item.code} · {item.subjectTitle}</small><span className="overview-work-meta"><i>{item.attendanceType==="ONLINE"?"Online":item.attendanceType==="FACE_TO_FACE"?"Face-to-Face":"Type not set"}</i>{item.scheduleOverrideReason&&<i className="makeup">Make-up · {item.scheduleOverrideReason}</i>}{(()=>{const marked=item.markedCount||0;const total=item.studentCount||0;const complete=total>0&&marked>=total;return <i className={marked===0?"status pending":complete?"status complete":"status progress"}>{marked===0?"Not recorded":complete?"Recorded":`${marked}/${total} marked`}</i>})()}</span></span><time>{formatOverviewDate(item.date)}</time></button></li>)}</ul> : <div className="overview-chart-empty">No attendance days are scheduled from today onward.</div>}
+    {overviewData.upcoming.attendance.length ? <ul className="overview-work-list">{overviewData.upcoming.attendance.map(item=><li key={item.id}><button type="button" className="overview-work-item attendance" onClick={()=>openClass(item.subjectId, "attendance")}><span className="overview-work-copy"><b>{item.title}</b><small>{item.code} · {item.subjectTitle}</small><span className="overview-work-meta"><i>{item.attendanceType==="ONLINE"?"Online":item.attendanceType==="FACE_TO_FACE"?"Face-to-Face":"Type not set"}</i>{item.scheduleOverrideReason&&<i className="makeup">Make-up · {item.scheduleOverrideReason}</i>}{(()=>{const marked=item.markedCount||0;const total=item.studentCount||0;const complete=total>0&&marked>=total;return <i className={marked===0?"status pending":complete?"status complete":"status progress"}>{marked===0?"Not recorded":complete?"Recorded":`${marked}/${total} marked`}</i>})()}</span></span><time>{formatOverviewDate(item.date)}</time></button></li>)}</ul> : <div className="overview-chart-empty">No attendance days are scheduled from today onward.</div>}
   </article>
-  <article className="surface overview-upcoming-card"><h3>Upcoming assessments</h3><p>Dated activities and tests in your classes.</p>{overviewData.upcoming.assessments.length ? <ul className="overview-work-list">{overviewData.upcoming.assessments.map(item=><li key={item.id}><button type="button" className="overview-work-item" onClick={()=>{setActiveId(item.subjectId);setClassSection("items");navigatePage("classes")}}><span className="overview-work-copy"><b>{item.title}</b><small>{item.code} · {item.subjectTitle}</small></span><time>{formatOverviewDate(item.date)}</time></button></li>)}</ul> : <div className="overview-chart-empty">Nothing scheduled yet.</div>}</article>
+  <article className="surface overview-upcoming-card"><h3>Upcoming assessments</h3><p>Dated activities and tests in your classes.</p>{overviewData.upcoming.assessments.length ? <ul className="overview-work-list">{overviewData.upcoming.assessments.map(item=><li key={item.id}><button type="button" className="overview-work-item" onClick={()=>openClass(item.subjectId, "items")}><span className="overview-work-copy"><b>{item.title}</b><small>{item.code} · {item.subjectTitle}</small></span><time>{formatOverviewDate(item.date)}</time></button></li>)}</ul> : <div className="overview-chart-empty">Nothing scheduled yet.</div>}</article>
 </div>
 {overviewLoading && <div className="overview-refresh-note" role="status">Updating report…</div>}
 </>}
-<section className="section-block"><div className="section-heading"><div><h2>Your subjects</h2><p className="muted">Open a class to manage rosters and grades.</p></div><button className="btn btn-outline-primary btn-sm" onClick={() => navigatePage("classes")}>Manage classes <span>→</span></button></div><p className="muted small dashboard-filter-note">Class cards use the school year and term filters in Smart Student Search above.</p>{visibleSubjects.length ? <><div className="subject-grid">{pageSubjects.map((s, i) => <button key={s.id} className="subject-card" onClick={() => { setActiveId(s.id); navigatePage("classes"); }}><div className={`subject-band band-${i%4}`}><span>{s.code} <small className="class-id-badge">{s.classId || "No Class ID"}</small></span><span className="subject-symbol">{["◌","⌁","▧","✳"][i%4]}</span></div><div className="subject-card-body"><div className="subject-card-title">{s.title}</div><div className="subject-metadata">{s.courseYear || "Class"} <span>·</span> {s.term} {s.academicYear}</div><div className="subject-card-footer"><span>♙ {s._count?.enrollments || 0} students</span><span className={`publish-state ${s.gradeStatus === "VERIFIED" ? "is-live" : ""}`}>{s.gradeStatus === "VERIFIED" ? "Final" : s.gradeStatus === "SUBMITTED" ? "Provisional · awaiting Registrar confirmation" : "Draft"}</span></div></div></button>)}</div>{subjectPageCount > 1 && <div className="list-pagination"><span>Showing {(subjectPage - 1) * subjectsPerPage + 1}–{Math.min(subjectPage * subjectsPerPage, visibleSubjects.length)} of {visibleSubjects.length} subjects</span><div><button className="btn btn-outline-secondary btn-sm" disabled={subjectPage <= 1} onClick={() => setSubjectPage(page => page - 1)}>Previous</button><span>Page {subjectPage} of {subjectPageCount}</span><button className="btn btn-outline-secondary btn-sm" disabled={subjectPage >= subjectPageCount} onClick={() => setSubjectPage(page => page + 1)}>Next</button></div></div>}</> : <div className="empty-state"><div className="empty-icon">▤</div><h3>{subjects.length ? "No classes match these filters" : "Your classes will show here"}</h3><p>{subjects.length ? "Change the school year or term to see more classes." : "Create your first subject to start building a class roster and gradebook."}</p>{!subjects.length&&<button className="btn btn-primary" onClick={() => setCreateOpen(true)}>Add your first subject</button>}</div>}</section></>}
+<section className="section-block"><div className="section-heading"><div><h2>Your subjects</h2><p className="muted">Open a class to manage rosters and grades.</p></div><button className="btn btn-outline-primary btn-sm" onClick={() => navigatePage("classes")}>Manage classes <span>→</span></button></div><p className="muted small dashboard-filter-note">Class cards use the school year and term filters in Smart Student Search above.</p>{visibleSubjects.length ? <><div className="subject-grid">{pageSubjects.map((s, i) => <button key={s.id} className="subject-card" onClick={() => openClass(s.id, "setup")}><div className={`subject-band band-${i%4}`}><span>{s.code} <small className="class-id-badge">{s.classId || "No Class ID"}</small></span><span className="subject-symbol">{["◌","⌁","▧","✳"][i%4]}</span></div><div className="subject-card-body"><div className="subject-card-title">{s.title}</div><div className="subject-metadata">{s.courseYear || "Class"} <span>·</span> {s.term} {s.academicYear}</div><div className="subject-card-footer"><span>♙ {s._count?.enrollments || 0} students</span><span className={`publish-state ${s.gradeStatus === "VERIFIED" ? "is-live" : ""}`}>{s.gradeStatus === "VERIFIED" ? "Final" : s.gradeStatus === "SUBMITTED" ? "Provisional · awaiting Registrar confirmation" : "Draft"}</span></div></div></button>)}</div>{subjectPageCount > 1 && <div className="list-pagination"><span>Showing {(subjectPage - 1) * subjectsPerPage + 1}–{Math.min(subjectPage * subjectsPerPage, visibleSubjects.length)} of {visibleSubjects.length} subjects</span><div><button className="btn btn-outline-secondary btn-sm" disabled={subjectPage <= 1} onClick={() => setSubjectPage(page => page - 1)}>Previous</button><span>Page {subjectPage} of {subjectPageCount}</span><button className="btn btn-outline-secondary btn-sm" disabled={subjectPage >= subjectPageCount} onClick={() => setSubjectPage(page => page + 1)}>Next</button></div></div>}</> : <div className="empty-state"><div className="empty-icon">▤</div><h3>{subjects.length ? "No classes match these filters" : "Your classes will show here"}</h3><p>{subjects.length ? "Change the school year or term to see more classes." : "Create your first subject to start building a class roster and gradebook."}</p>{!subjects.length&&<button className="btn btn-primary" onClick={() => setCreateOpen(true)}>Add your first subject</button>}</div>}</section></>}
       {tab === "classes" && <>
         <div className="class-toolbar">
           <div className="class-filter-row"><label>School year<select className="form-select" value={schoolYearFilter} onChange={e=>setSchoolYearFilter(e.target.value)}><option>All School Years</option>{schoolYears.map(year=><option key={year}>{year}</option>)}</select></label><label>Term<select className="form-select" value={termFilter} onChange={e=>setTermFilter(e.target.value)}><option>All Terms</option>{terms.map(term=><option key={term}>{term}</option>)}</select></label></div>
           <label className="class-student-filter"><span>Find student in this class</span><input className="form-control" type="search" value={classStudentFilter} onChange={event=>setClassStudentFilter(event.target.value)} placeholder="Name or student ID" autoComplete="off"/></label>
-          <div className="class-select-wrap"><label className="form-label" htmlFor="my-classes-select">My Classes</label><select id="my-classes-select" className="form-select" value={activeId} disabled={!visibleSubjects.length} onChange={e => setActiveId(e.target.value)}><option value="">Choose a class to load…</option>{pageClassOptions.map(s => <option key={s.id} value={s.id}>{s.classId ? `${s.classId} · ` : ""}{s.code} — {s.title}</option>)}</select>{classPageCount > 1 && <div className="class-select-pages"><button type="button" className="btn btn-link btn-sm" disabled={classPage <= 1} onClick={() => setClassPage(page => page - 1)}>Previous</button><small>Page {classPage} of {classPageCount}</small><button type="button" className="btn btn-link btn-sm" disabled={classPage >= classPageCount} onClick={() => setClassPage(page => page + 1)}>Next</button></div>}</div>
+          <div className="class-select-wrap"><label className="form-label" htmlFor="my-classes-select">My Classes</label><select id="my-classes-select" className="form-select" value={activeId} disabled={!visibleSubjects.length} onChange={e => { if (e.target.value) openClass(e.target.value, "setup", {}, true); }}><option value="">Choose a class…</option>{pageClassOptions.map(s => <option key={s.id} value={s.id}>{s.classId ? `${s.classId} · ` : ""}{s.code} — {s.title}</option>)}</select>{classPageCount > 1 && <div className="class-select-pages"><button type="button" className="btn btn-link btn-sm" disabled={classPage <= 1} onClick={() => setClassPage(page => page - 1)}>Previous</button><small>Page {classPage} of {classPageCount}</small><button type="button" className="btn btn-link btn-sm" disabled={classPage >= classPageCount} onClick={() => setClassPage(page => page + 1)}>Next</button></div>}</div>
           <div className="toolbar-actions"><button type="button" className="btn btn-outline-primary grade-visibility-launch" disabled={!subjects.length} onClick={() => setVisibilityManagerQuery("")}><span>Manage grade visibility</span><small>{visibleClassCount} / {subjects.length} shown</small></button><button className="btn btn-outline-primary" onClick={exportRoster} disabled={!detail}>↓ Export roster (Excel)</button><button className="btn btn-outline-primary" onClick={() => setRosterOpen(true)} disabled={!detail}>＋ Add students</button></div>
         </div>
         {!visibleSubjects.length && <div className="empty-state"><div className="empty-icon">▤</div><h3>No classes match these filters</h3><p>Change the school year or term selection to see your class list.</p></div>}
-        {visibleSubjects.length > 0 && !activeId && <div className="empty-state"><div className="empty-icon">▤</div><h3>Select a class to open</h3><p>Choose a class from My Classes to load its roster and records.</p></div>}
+        {visibleSubjects.length > 0 && !activeId && <div className="empty-state"><div className="empty-icon">▤</div><h3>Opening your class…</h3><p>Loading the first class that matches the selected school year and term.</p></div>}
         {detail && <>
-          <section className="surface class-summary"><div><span className="eyebrow">{detail.courseYear || "CLASS RECORD"} · {detail.term} {detail.academicYear}</span><h2>{detail.code}: {detail.title}</h2><p className="muted mb-0">Class ID: <b>{detail.classId || "Not set"}</b> · {formatSchedule(detail.schedule) || "Schedule not set"} · {detail.enrollments.length} rostered students</p></div><div className="class-final-actions"><button type="button" className="btn btn-outline-primary grade-visibility-current" onClick={() => setVisibilityManagerQuery(detail.classId || detail.code)}>{detail.isPublished ? "Visible to students" : "Hidden from students"} · Manage</button><span className={`grade-status-pill ${detail.gradeStatus === "VERIFIED" ? "final" : detail.gradeStatus === "SUBMITTED" ? "provisional" : "draft"}`}>{detail.gradeStatus === "VERIFIED" ? "Verified to Registrar · Final" : detail.gradeStatus === "SUBMITTED" ? "Awaiting teacher confirmation to Registrar" : "Draft · Not submitted"}</span><button className="btn btn-outline-primary" onClick={()=>setClassSection("final")}>Final grades</button><button className="btn btn-outline-primary" onClick={openSubjectEditor} disabled={detail.gradeStatus!=="DRAFT"}>Edit class</button><button className="btn btn-outline-danger" onClick={deleteSubject} disabled={busy||detail.gradeStatus!=="DRAFT"}>Delete class</button></div></section>
+          <section className="surface class-summary"><div><span className="eyebrow">{detail.courseYear || "CLASS RECORD"} · {detail.term} {detail.academicYear}</span><h2>{detail.code}: {detail.title}</h2><p className="muted mb-0">Class ID: <b>{detail.classId || "Not set"}</b> · {formatSchedule(detail.schedule) || "Schedule not set"} · {detail.enrollments.length} rostered students</p></div><div className="class-final-actions"><button type="button" className="btn btn-outline-primary grade-visibility-current" onClick={() => setVisibilityManagerQuery(detail.classId || detail.code)}>{detail.isPublished ? "Visible to students" : "Hidden from students"} · Manage</button><span className={`grade-status-pill ${detail.gradeStatus === "VERIFIED" ? "final" : detail.gradeStatus === "SUBMITTED" ? "provisional" : "draft"}`}>{detail.gradeStatus === "VERIFIED" ? "Verified to Registrar · Final" : detail.gradeStatus === "SUBMITTED" ? "Awaiting teacher confirmation to Registrar" : "Draft · Not submitted"}</span><button className="btn btn-outline-primary" onClick={()=>openClassSection("final")}>Final grades</button><button className="btn btn-outline-primary" onClick={openSubjectEditor} disabled={detail.gradeStatus!=="DRAFT"}>Edit class</button><button className="btn btn-outline-danger" onClick={deleteSubject} disabled={busy||detail.gradeStatus!=="DRAFT"}>Delete class</button></div></section>
           <nav className="class-section-tabs" aria-label="Class workspace">
-            <button className={classSection === "setup" ? "active" : ""} onClick={() => setClassSection("setup")}>Grading setup</button><button className={classSection === "roster" ? "active" : ""} onClick={() => setClassSection("roster")}>Class roster</button><button className={classSection === "items" ? "active" : ""} onClick={() => setClassSection("items")}>Assessment items</button><button className={classSection === "record" ? "active" : ""} onClick={() => setClassSection("record")}>Record scores</button>
-            <button className={classSection === "attendance" ? "active" : ""} onClick={() => setClassSection("attendance")}>Attendance</button>
-            <button className={classSection === "analytics" ? "active" : ""} onClick={() => setClassSection("analytics")}>Class analytics</button>
-            <button className={classSection === "final" ? "active" : ""} onClick={() => setClassSection("final")}>Final grades &amp; submit</button>
+            <button className={classSection === "setup" ? "active" : ""} onClick={() => openClassSection("setup")}>Grading setup</button><button className={classSection === "roster" ? "active" : ""} onClick={() => openClassSection("roster")}>Class roster</button><button className={classSection === "items" ? "active" : ""} onClick={() => openClassSection("items")}>Assessment items</button><button className={classSection === "record" ? "active" : ""} onClick={() => openClassSection("record")}>Record scores</button>
+            <button className={classSection === "attendance" ? "active" : ""} onClick={() => openClassSection("attendance")}>Attendance</button>
+            <button className={classSection === "analytics" ? "active" : ""} onClick={() => openClassSection("analytics")}>Class analytics</button>
+            <button className={classSection === "final" ? "active" : ""} onClick={() => openClassSection("final")}>Final grades &amp; submit</button>
           </nav>
           {classSection === "setup" && <>
             <section id="class-section-setup" className="surface grading-card">
