@@ -67,6 +67,12 @@ export type GradeContribution = {
   excusedItems: number;
 };
 
+/** Convert a raw item percentage using the school's grading base. */
+export function convertRawPercent(rawPercent: number, conversionBase = 50) {
+  const base = Math.min(100, Math.max(1, conversionBase));
+  return Math.round((rawPercent * base / 100 + (100 - base)) * 100) / 100;
+}
+
 const roundPercent = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 const isRecorded = (assessment: GradeCalculationCategory["assessments"][number]) => {
   const score = assessment.scores[0];
