@@ -37,7 +37,7 @@ export async function GET(request: Request) {
   const today = new Date(`${manilaDate}T00:00:00.000Z`);
   const subjectScope = { teacherId: teacher.id, schoolId: teacher.schoolId };
 
-  const [subjects, upcomingAttendance, upcomingAssessments, attendanceCounts] = await Promise.all([
+  const [subjects, upcomingAttendance, upcomingAssessments, attendanceCounts, todaysAttendance] = await Promise.all([
     prisma.subject.findMany({
       where: subjectScope,
       select: {
@@ -54,7 +54,7 @@ export async function GET(request: Request) {
     }),
     prisma.assessment.findMany({
       where: { subject: subjectScope, title: { startsWith: "Attendance ·" }, dueDate: { gte: today } },
-      orderBy: { dueDate: "asc" }, take: 8,
+      orderBy: { dueDate: "asc" }, take: 48,
       select: { id: true, title: true, dueDate: true, attendanceType: true, scheduleOverrideReason: true, _count: { select: { scores: { where: { remark: { in: ["PRESENT", "ABSENT", "EXCUSED"] } } } } }, subject: { select: { id: true, code: true, title: true, _count: { select: { enrollments: true } } } } }
     }),
     prisma.assessment.findMany({
@@ -67,6 +67,15 @@ export async function GET(request: Request) {
       by: ["remark"],
       where: { assessment: { subject: subjectScope, title: { startsWith: "Attendance ·" }, dueDate: { gte: from, lt: rangeEnd } } },
       _count: { _all: true }
+    }),
+    // The selected analytics range may not include today.
+    prisma.assessment.findMany({
+      where: { subject: subjectScope, title: { startsWith: "Attendance ·" }, dueDate: { gte: today, lt: nextDay(today) } },
+      select: {
+        subjectId: true,
+        _count: { select: { scores: { where: { remark: { in: ["PRESENT", "ABSENT", "EXCUSED"] } } } } },
+        subject: { select: { _count: { select: { enrollments: true } } } }
+      }
     })
   ]);
 
@@ -95,6 +104,11 @@ export async function GET(request: Request) {
     provisional: subjects.filter(subject => subject.gradeStatus === "SUBMITTED").length,
     final: subjects.filter(subject => subject.gradeStatus === "VERIFIED").length
   };
+  const attendanceComplete = (markedCount: number, studentCount: number) =>
+    studentCount > 0 && markedCount >= studentCount;
+  const todayCompleted = new Set(todaysAttendance
+    .filter(item => attendanceComplete(item._count.scores, item.subject._count.enrollments))
+    .map(item => item.subjectId));
   const upcoming = (items: typeof upcomingAttendance, isAttendance = false) => items.map(item => ({
     id: item.id,
     title: isAttendance ? "Attendance day" : item.title,
@@ -116,11 +130,16 @@ export async function GET(request: Request) {
       title: subject.title,
       classId: subject.classId,
       schedule: sessions,
-      canRecordAttendance: subject.gradeStatus !== "VERIFIED"
+      canRecordAttendance: subject.gradeStatus !== "VERIFIED" && !todayCompleted.has(subject.id)
     }] : [];
   });
 
+  const pendingAttendance = upcomingAttendance
+    .filter(item => !attendanceComplete(item._count.scores, item.subject._count.enrollments))
+    .slice(0, 8);
+  const completedTodayCount = todayClasses.filter(item => todayCompleted.has(item.id)).length;
   return NextResponse.json({
+    completedTodayCount,
     stats: {
       activeClasses: subjects.length,
       activeStudents: students.size,
@@ -134,6 +153,6 @@ export async function GET(request: Request) {
     enrollment: subjects.map(subject => ({ id: subject.id, label: subject.classId || subject.code, title: subject.title, code: subject.code, count: subject.enrollments.length })),
     today: manilaDate,
     todayClasses,
-    upcoming: { attendance: upcoming(upcomingAttendance, true), assessments: upcoming(upcomingAssessments) }
+    upcoming: { attendance: upcoming(pendingAttendance, true), assessments: upcoming(upcomingAssessments) }
   });
 }
