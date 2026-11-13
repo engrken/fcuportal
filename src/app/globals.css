@@ -1238,3 +1238,91 @@
 @media(max-width:760px){.student-overview-hero{padding:19px;min-height:150px}.student-overview-hero h2{font-size:1.2rem}.student-overview-hero p{font-size:.76rem}.student-overview-stats{margin:12px 0 19px;gap:9px}.student-overview-stats .student-stat{padding:12px}.student-overview-stats .student-stat strong{font-size:1.4rem}.student-grade-section-heading{align-items:flex-start}.student-grade-card-modern{grid-template-columns:40px minmax(0,1fr) minmax(91px,110px);gap:10px;padding:15px}.student-grade-card-modern .grade-course-icon{width:40px;height:40px}.student-grade-card-modern .grade-result strong{font-size:1.05rem}.student-grade-card-modern .grade-result small{font-size:.49rem}.student-grade-card-modern .grade-result span{font-size:.59rem}.student-grade-actions{grid-column:2/-1;justify-self:end}.student-grade-header-actions{justify-content:flex-start}}
 @media(max-width:520px){.student-grade-card-modern{grid-template-columns:40px minmax(0,1fr)}.student-grade-card-modern .grade-course-details{grid-column:2}.student-grade-card-modern .grade-result{grid-column:2;border-left:0;border-top:1px solid var(--bs-border-color,#e9edf3);padding:10px 0 0}.student-grade-card-modern .grade-result small,.student-grade-card-modern .grade-result strong,.student-grade-card-modern .grade-result span,.student-grade-card-modern .grade-percent{display:inline-block;margin:0 10px 0 0}.student-grade-card-modern .grade-result strong{font-size:1.13rem}.student-grade-actions{grid-column:2;justify-self:start}.student-grade-card-modern .student-itemized-on-demand{grid-column:1/-1}.student-itemized-on-demand summary{align-items:flex-start;flex-direction:column;gap:4px}.student-itemized-on-demand summary small{text-align:left}.student-overview-hero .student-orb{opacity:.55}.student-grade-filters{grid-template-columns:1fr!important}.student-grade-filters label{grid-column:auto!important}}
 @media(prefers-reduced-motion:reduce){.student-assessment-track>span,.student-itemized-on-demand summary span:before{transition:none}.student-details-content{animation:none}}
+
+/* Platform owner / tenant operations. Responsive without requiring a paid chart or reporting service. */
+.tenant-operations{max-width:1650px;min-height:100vh;display:block;color:var(--bs-body-color,#203451)}
+.tenant-operations-header{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;margin-bottom:16px}
+.tenant-admin-controls{display:flex;align-items:center;gap:13px;flex-wrap:wrap;justify-content:flex-end}
+.tenant-admin-controls>div{display:grid;text-align:right;gap:2px;min-width:0}
+.tenant-admin-controls b{font-size:.78rem}
+.tenant-admin-controls small{font-size:.68rem;color:var(--bs-secondary-color,#77869b);overflow-wrap:anywhere}
+.tenant-operations-note{padding:12px 16px;border:1px solid #dfe8f6;border-radius:11px;background:#f4f8ff;color:#546682;font-size:.73rem;line-height:1.55;margin:0 0 18px}
+.tenant-operations-note b{color:#294c8a}
+.tenant-kpi-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:0 0 18px}
+.tenant-kpi{display:grid;gap:6px;min-width:0;align-content:start;padding:15px 17px!important;border-radius:13px!important}
+.tenant-kpi>small{font-weight:800;font-size:.66rem;letter-spacing:.025em;color:var(--bs-secondary-color,#657792)}
+.tenant-kpi>strong{font-size:clamp(1rem,1.55vw,1.43rem);letter-spacing:-.03em;line-height:1.32;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.tenant-kpi>span{color:var(--bs-secondary-color,#8290a4);font-size:.66rem}
+.tenant-kpi-alert{border-color:#eec79b!important}
+.tenant-workspace-grid{display:grid;grid-template-columns:minmax(0,1.28fr) minmax(355px,1fr);align-items:start;gap:16px}
+.tenant-school-list,.tenant-settings-panel,.tenant-operations-detail{min-width:0;padding:20px!important;border-radius:15px!important}
+.tenant-panel-header{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:15px}
+.tenant-panel-header h2,.tenant-panel-header h3{margin:0;font-size:1rem;font-weight:800;line-height:1.35}
+.tenant-panel-header h2{font-size:1.16rem}
+.tenant-panel-header small{display:block;margin-top:4px;color:var(--bs-secondary-color,#78869a);font-size:.69rem}
+.tenant-export-actions,.tenant-roster-links,.tenant-action-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.tenant-export-actions .btn,.tenant-roster-links .btn{font-size:.67rem;white-space:nowrap}
+.tenant-filter-grid{display:grid;grid-template-columns:minmax(160px,1.4fr) repeat(3,minmax(110px,.85fr));gap:10px;margin:0 0 15px}
+.tenant-filter-grid label{display:grid;gap:5px;color:var(--bs-secondary-color,#65758d);font-size:.68rem;font-weight:750;min-width:0}
+.tenant-filter-grid input,.tenant-filter-grid select{font-size:.75rem;min-height:37px;padding:6px 8px;min-width:0}
+.tenant-table-wrap{max-width:100%;overflow-x:auto}
+.tenant-workspace-table{min-width:720px;margin-bottom:0}
+.tenant-workspace-table th{white-space:nowrap;font-size:.64rem;letter-spacing:.035em;font-weight:800;color:var(--bs-secondary-color,#67768c)}
+.tenant-workspace-table td{font-size:.72rem;vertical-align:middle}
+.tenant-workspace-table td[data-label="Teachers"],.tenant-workspace-table td[data-label="Students"],.tenant-workspace-table td[data-label="Classes / seats"]{white-space:nowrap;font-variant-numeric:tabular-nums}
+.tenant-row-selected{background:rgba(60,111,211,.07)}
+.tenant-school-button{display:grid;gap:3px;width:100%;min-width:130px;padding:5px 0;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer}
+.tenant-school-button b{font-size:.75rem;color:var(--bs-primary,#2458d3);overflow-wrap:anywhere}
+.tenant-school-button small{font-size:.67rem;color:var(--bs-secondary-color,#8592a5);overflow-wrap:anywhere}
+.tenant-school-button:hover b{text-decoration:underline}
+.tenant-school-button:focus-visible{outline:2px solid #527fd4;outline-offset:3px;border-radius:4px}
+.tenant-health{display:inline-block;width:max-content;max-width:100%;padding:5px 9px;border-radius:8px;font-size:.63rem;font-weight:750;line-height:1.3;overflow-wrap:anywhere}
+.tenant-health-good{background:#e8f5ef;color:#19754e}
+.tenant-health-warning{background:#fff3dd;color:#845516}
+.tenant-health-danger{background:#ffe9e7;color:#a23632}
+.tenant-list-empty{text-align:center;padding:24px 12px;color:var(--bs-secondary-color,#768498);font-size:.78rem}
+.tenant-list-empty p{margin:6px 0 13px}
+.tenant-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:13px;font-size:.7rem;color:var(--bs-secondary-color,#76869e)}
+.tenant-pagination>div{display:flex;gap:7px}
+.tenant-data-hint{margin:12px 0 0;font-size:.67rem;line-height:1.5;color:var(--bs-secondary-color,#76869c)}
+.tenant-settings-column{display:grid;gap:16px;min-width:0}
+.tenant-selected-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:6px 0 13px}
+.tenant-selected-stats>div{display:grid;gap:4px;min-width:0;padding:11px 9px;border-radius:10px;background:var(--bs-tertiary-bg,#f4f7fb)}
+.tenant-selected-stats small{font-size:.61rem;color:var(--bs-secondary-color,#697b92);font-weight:700}
+.tenant-selected-stats b{font-size:1.2rem;font-variant-numeric:tabular-nums}
+.tenant-selected-stats span{font-size:.6rem;color:var(--bs-secondary-color,#8996a8)}
+.tenant-action-row{margin-bottom:12px}
+.tenant-action-row .btn{font-size:.67rem}
+.tenant-follow-up{margin-top:10px;padding:10px 12px;border-left:3px solid #c8984f;border-radius:6px;background:#fff8eb;color:#805a24;font-size:.69rem;line-height:1.5}
+.tenant-section-header{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;border-top:1px solid var(--bs-border-color,#e2e9f1);padding-top:17px;margin:19px 0 14px}
+.tenant-section-header h3{margin:0;font-size:.84rem;font-weight:800}
+.tenant-section-header span{color:var(--bs-secondary-color,#7a879a);font-size:.64rem}
+.tenant-renewal-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+.tenant-renewal-row .btn{white-space:nowrap}
+.tenant-save-actions{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;border-top:1px solid var(--bs-border-color,#e8edf5);margin-top:20px;padding-top:15px}
+.tenant-save-actions span{font-size:.68rem;color:var(--bs-secondary-color,#78879b)}
+.tenant-save-actions .btn{min-width:160px}
+.tenant-operations-detail{padding:17px 20px!important}
+.tenant-payment-list,.tenant-activity-list,.tenant-teacher-list{display:grid;gap:0}
+.tenant-payment-list>div,.tenant-activity-list article,.tenant-teacher-list>div{display:grid;gap:4px;min-width:0;padding:11px 0;border-top:1px solid var(--bs-border-color,#e9edf4);font-size:.72rem}
+.tenant-payment-list b,.tenant-activity-list b,.tenant-teacher-list b{font-size:.73rem;overflow-wrap:anywhere}
+.tenant-payment-list span,.tenant-payment-list small,.tenant-activity-list small,.tenant-teacher-list small{font-size:.67rem;color:var(--bs-secondary-color,#77869a);line-height:1.45;overflow-wrap:anywhere}
+.tenant-teacher-list>div{grid-template-columns:minmax(0,1fr) auto;column-gap:8px;align-items:start}
+.tenant-teacher-list b,.tenant-teacher-list small{grid-column:1}
+.tenant-teacher-list .tenant-health{grid-column:2;grid-row:1/3}
+.tenant-select-empty{padding:38px 20px!important;text-align:center;color:var(--bs-secondary-color,#78879a)}
+.tenant-operations[data-bs-theme="dark"]{background:#101927;color:#e4ebf6}
+.tenant-operations[data-bs-theme="dark"] .surface{background:#172235!important;border-color:#34425a!important;color:#e4ebf6}
+.tenant-operations[data-bs-theme="dark"] .tenant-operations-note{background:#1b2b46;color:#c3cee0;border-color:#354864}
+.tenant-operations[data-bs-theme="dark"] .tenant-operations-note b{color:#b5ccff}
+.tenant-operations[data-bs-theme="dark"] .tenant-health-good{background:#1b3a31;color:#a2e4c7}
+.tenant-operations[data-bs-theme="dark"] .tenant-health-warning{background:#4b371d;color:#ffdfa3}
+.tenant-operations[data-bs-theme="dark"] .tenant-health-danger{background:#472b34;color:#ffb8bd}
+.tenant-operations[data-bs-theme="dark"] .tenant-follow-up{background:#382d25;color:#eed0a2}
+.tenant-operations[data-bs-theme="dark"] .tenant-row-selected{background:rgba(89,144,241,.15)}
+.tenant-operations[data-bs-theme="dark"] .tenant-school-button b{color:#accaff}
+.tenant-operations[data-bs-theme="dark"] .tenant-selected-stats>div{background:#22314a}
+@media(max-width:1380px){.tenant-kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.tenant-workspace-grid{grid-template-columns:1fr}.tenant-settings-column{grid-template-columns:repeat(2,minmax(0,1fr))}.tenant-settings-panel{grid-column:1/-1}}
+@media(max-width:850px){.tenant-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tenant-workspace-table{min-width:650px}.tenant-operations-header{flex-wrap:wrap}.tenant-admin-controls{justify-content:flex-start}.tenant-admin-controls>div{text-align:left}}
+@media(max-width:680px){.tenant-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tenant-settings-column{grid-template-columns:1fr}.tenant-filter-grid{grid-template-columns:1fr}.tenant-workspace-table,.tenant-workspace-table tbody,.tenant-workspace-table tr{display:block;min-width:0}.tenant-workspace-table thead{display:none}.tenant-workspace-table tr{margin:0 0 12px;padding:12px;border:1px solid var(--bs-border-color,#e3eaf3);border-radius:11px}.tenant-workspace-table td{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;width:100%;padding:6px 2px;border:0;text-align:right}.tenant-workspace-table td:before{content:attr(data-label);color:var(--bs-secondary-color,#718198);font-size:.68rem;font-weight:700;text-align:left;flex:none}.tenant-workspace-table td:first-child:before{display:none}.tenant-workspace-table td:first-child{padding-bottom:11px;border-bottom:1px solid var(--bs-border-color,#e4e9f3)}.tenant-school-button{text-align:left}.tenant-workspace-table td:last-child{align-items:center}.tenant-roster-links{justify-content:flex-end}.tenant-selected-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.tenant-school-list,.tenant-settings-panel{padding:15px!important}.tenant-operations-header h1{font-size:1.5rem}.tenant-export-actions{width:100%}.tenant-export-actions .btn{flex:1}.tenant-renewal-row{grid-template-columns:1fr}.tenant-save-actions .btn{width:100%}}
+@media(max-width:440px){.tenant-kpi-grid{gap:8px}.tenant-kpi{padding:12px!important}.tenant-kpi>strong{font-size:1.04rem}.tenant-panel-header{align-items:flex-start}.tenant-roster-links .btn{padding:6px}}
