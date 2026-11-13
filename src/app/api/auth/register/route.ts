@@ -50,7 +50,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Teacher registration requires an invitation code from the portal owner." }, { status: 403 });
     }
     if (role === "TEACHER" && !fullName) return NextResponse.json({ error: "Enter your full name." }, { status: 400 });
-    if (role === "TEACHER" && !schoolName?.trim()) return NextResponse.json({ error: "Enter your school name." }, { status: 400 });
+    if (role === "TEACHER") {
+      const existingSchoolSelected = Boolean(schoolId);
+      const newSchoolNamed = Boolean(schoolName?.trim());
+      if (existingSchoolSelected === newSchoolNamed) {
+        return NextResponse.json({ error: "Select an existing school or choose Not listed and enter the new school name." }, { status: 400 });
+      }
+      if (existingSchoolSelected) {
+        const selectedSchool = await prisma.school.findUnique({ where: { id: schoolId! }, select: { isActive: true } });
+        if (!selectedSchool) return NextResponse.json({ error: "School not found. Refresh the list and select a school." }, { status: 404 });
+        if (!selectedSchool.isActive) return NextResponse.json({ error: "This school workspace is inactive. Contact SAGA support." }, { status: 403 });
+      } else {
+        const normalizedSchoolName = schoolName!.trim().replace(/\s+/g, " ");
+        const alreadyListed = await prisma.school.findFirst({
+          where: { name: { equals: normalizedSchoolName, mode: "insensitive" } },
+          select: { isActive: true }
+        });
+        if (alreadyListed) return NextResponse.json({
+          error: alreadyListed.isActive
+            ? "This school already exists. Please select it from the school dropdown instead of creating another workspace."
+            : "This school workspace is inactive. Contact SAGA support to restore access."
+        }, { status: alreadyListed.isActive ? 409 : 403 });
+      }
+    }
     if (role === "STUDENT" && (!schoolId || !studentNumber)) return NextResponse.json({ error: "Choose your school and enter your student ID." }, { status: 400 });
 
     const normalizedStudentNumber = studentNumber?.trim().toUpperCase();
@@ -73,16 +95,28 @@ export async function POST(request: Request) {
       if (!(await consumeEmailChallenge(tx, binding, challengeId, code))) return null;
       let school: School | null = null;
       if (role === "TEACHER") {
-        const normalizedSchoolName = schoolName!.trim().replace(/\s+/g, " ");
-        school = await tx.school.findFirst({ where: { name: { equals: normalizedSchoolName, mode: "insensitive" }, isActive: true } });
-        if (!school) {
-          const unavailableSchool = await tx.school.findFirst({ where: { name: { equals: normalizedSchoolName, mode: "insensitive" }, isActive: false }, select: { id: true } });
-          if (unavailableSchool) throw new Error("SCHOOL_INACTIVE");
+        if (schoolId) {
+          // Existing-school registration must use the selected school ID.
+          // Never create another school when an existing one was selected.
+          school = await tx.school.findUnique({ where: { id: schoolId } });
+          if (!school) throw new Error("SCHOOL_NOT_FOUND");
+          if (!school.isActive) throw new Error("SCHOOL_INACTIVE");
+        } else {
+          const normalizedSchoolName = schoolName!.trim().replace(/\s+/g, " ");
+          // Serialize simultaneous attempts to register the same school.
+          // This avoids duplicates even if two teachers verify their OTPs together.
+          await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${normalizedSchoolName.toLowerCase()}))::text`;
+          const existingSchool = await tx.school.findFirst({
+            where: { name: { equals: normalizedSchoolName, mode: "insensitive" } }
+          });
+          if (existingSchool) throw new Error(existingSchool.isActive ? "SCHOOL_ALREADY_EXISTS" : "SCHOOL_INACTIVE");
           const identity = schoolIdentity(normalizedSchoolName);
           if (await tx.school.findUnique({ where: { slug: identity.slug }, select: { id: true } })) {
             identity.slug = `${identity.slug}-${Math.random().toString(36).slice(2, 7)}`;
           }
-          school = await tx.school.create({ data: { name: normalizedSchoolName, ...identity, portalTitle: "SAGA Portal" } });
+          school = await tx.school.create({
+            data: { name: normalizedSchoolName, ...identity, portalTitle: "SAGA Portal" }
+          });
         }
         if (!school) throw new Error("SCHOOL_NOT_READY");
         const teacherCount = await tx.user.count({ where: { schoolId: school.id, role: "TEACHER" } });
@@ -108,6 +142,8 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("PLAN_LIMIT_TEACHERS:")) return NextResponse.json({ error: `This school has reached its teacher limit (${error.message.split(":")[1]}). Contact SAGA to upgrade the school plan.` }, { status: 402 });
     if (error instanceof Error && error.message === "SCHOOL_INACTIVE") return NextResponse.json({ error: "This school workspace is currently inactive. Contact SAGA support to restore access." }, { status: 403 });
+    if (error instanceof Error && error.message === "SCHOOL_NOT_FOUND") return NextResponse.json({ error: "School not found. Refresh the school list and try again." }, { status: 404 });
+    if (error instanceof Error && error.message === "SCHOOL_ALREADY_EXISTS") return NextResponse.json({ error: "This school already exists. Select it from the dropdown instead of creating a duplicate." }, { status: 409 });
     if (error instanceof Error && error.message === "STUDENT_EMAIL_CHANGED") return NextResponse.json({ error: "Your school roster email changed. Check it with your school and start registration again." }, { status: 409 });
     if (error instanceof Error && error.message === "SCHOOL_NOT_READY") return NextResponse.json({ error: "That school is not accepting student registration yet." }, { status: 400 });
     if (error && typeof error === "object" && "code" in error && error.code === "P2002") return NextResponse.json({ error: "An account already uses that email or student number." }, { status: 409 });
