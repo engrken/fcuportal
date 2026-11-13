@@ -1,6 +1,6 @@
 {
   "name": "fcu-student-portal",
-  "version": "0.1.0",
+  "version": "0.2.0-beta.1",
   "private": true,
   "type": "module",
   "engines": {
@@ -20,7 +20,10 @@
     "test:scorebook-layout": "node --test tests/scorebook-layout.test.cjs tests/fcu-grade-format.test.cjs",
     "test:tenant": "node --test tests/tenant-operations.test.cjs",
     "test:teacher-signup": "node --test tests/teacher-school-registration.test.cjs",
-    "test:identity": "node --test tests/account-identity.test.cjs"
+    "test:identity": "node --test tests/account-identity.test.cjs",
+    "version:fix": "node scripts/bump-release.mjs fix",
+    "version:feature": "node scripts/bump-release.mjs feature",
+    "version:major": "node scripts/bump-release.mjs major"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",
