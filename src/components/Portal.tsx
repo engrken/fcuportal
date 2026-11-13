@@ -261,7 +261,7 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
       return { col: range.start, value: suppress || percent === null ? "" : Number((percent * effectiveCategoryWeight(range.category, detail.categories) / 100).toFixed(2)), style: 5 };
     });
     const gradeString = suppress ? "" : enrollment.finalGradeOverride || band?.finalGrade || "";
-    const gradeNumber = gradeString && /^\\d+(?:\\.\\d+)?$/.test(gradeString) ? Number(gradeString) : gradeString;
+    const gradeNumber = gradeString && /^[0-9]+(?:\.[0-9]+)?$/.test(gradeString) ? Number(gradeString) : gradeString;
     row([
       { col: 0, value: (index + 1) + ". " + enrollment.studentName.toLocaleUpperCase(), style: 5 },
       ...componentValues,
@@ -606,7 +606,28 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     setAttendanceQuickOpenId("");
     router.replace(classWorkspaceHref(user.school.slug, selectedId, "setup", undefined, subjects), { scroll: false });
   }, [teacher, loading, tab, subjects, activeId, schoolYearFilter, termFilter, router, user.school.slug]);
-  useEffect(() => { if (!printMode) return; const timer = window.setTimeout(() => window.print(), 120); const afterPrint = () => setPrintMode(null); window.addEventListener("afterprint", afterPrint); return () => { window.clearTimeout(timer); window.removeEventListener("afterprint", afterPrint); }; }, [printMode]);
+  useEffect(() => {
+    if (!printMode) return;
+    let cancelled = false;
+    const afterPrint = () => setPrintMode(null);
+    window.addEventListener("afterprint", afterPrint);
+    async function openPrint() {
+      if (user.school.slug === "fcu") {
+        const image = document.querySelector<HTMLImageElement>(".fcu-print-official-header");
+        if (image && !image.complete) {
+          await new Promise<void>(resolve => {
+            const finish = () => resolve();
+            image.addEventListener("load", finish, { once: true });
+            image.addEventListener("error", finish, { once: true });
+          });
+        }
+      }
+      await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      if (!cancelled) window.print();
+    }
+    void openPrint();
+    return () => { cancelled = true; window.removeEventListener("afterprint", afterPrint); };
+  }, [printMode, user.school.slug]);
   async function logout() { await fetch("/api/auth/logout", { method: "POST" }); router.replace("/login"); router.refresh(); }
   function toggleClassNav() {
     if (tab !== "classes") navigatePage("classes");
@@ -1228,11 +1249,11 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
             <td>{index+1}. {en.studentName.toLocaleUpperCase()}</td>
             {printCategories.map(category=>{
               const percentage=weightedCategoryPercent(en,category,detail.categories,detail.assessments);
-              return <td key={category.id}>{printMode==="grades"&&!suppress&&percentage!==null?(percentage*effectiveCategoryWeight(category,detail.categories)/100).toFixed(2):""}</td>;
+              return <td key={category.id}>{printMode==="grades"&&!suppress&&percentage!==null?`:   ${(percentage*effectiveCategoryWeight(category,detail.categories)/100).toFixed(2)}   :`:""}</td>;
             })}
-            <td>{printMode==="grades"&&!suppress&&en.finalPercent!==null?en.finalPercent.toFixed(2):""}</td>
-            <td>{printMode==="grades"&&!suppress?(en.finalGradeOverride||band?.finalGrade||""):""}</td>
-            <td>{printMode==="grades"?remark:""}</td>
+            <td>{printMode==="grades"&&!suppress&&en.finalPercent!==null?`:   ${en.finalPercent.toFixed(2)}   :`:""}</td>
+            <td>{printMode==="grades"&&!suppress&&((en.finalGradeOverride||band?.finalGrade))?`:   ${en.finalGradeOverride||band?.finalGrade}   :`:""}</td>
+            <td>{printMode==="grades"&&remark?`:   ${remark}   :`:""}</td>
           </tr>;
         })}</tbody></table>
         <div className="print-signatures"><div>Submitted by:<p><u>{user.fullName.toLocaleUpperCase()}</u><small>TEACHER&apos;S SIGNATURE OVER PRINTED NAME</small></p></div><div>Noted:<p><u>&nbsp;</u><small>DEAN&apos;S SIGNATURE OVER PRINTED NAME</small></p></div></div>
