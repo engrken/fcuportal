@@ -12,7 +12,7 @@ const HelpCenter = dynamic(() => import("./PortalGuides").then(module => module.
 const OnboardingGuide = dynamic(() => import("./PortalGuides").then(module => module.OnboardingGuide));
 const PhilippineHolidayCalendar = dynamic(() => import("./PhilippineHolidayCalendar").then(module => module.PhilippineHolidayCalendar));
 import { calculateCategoryPercent, calculateFinal, calculateGradeBreakdown, convertRawPercent, remainingChildAllocation } from "@/lib/grades";
-import { classWorkspaceHref, resolveClassSelection, type ClassSection } from "@/lib/class-navigation";
+import { classWorkspaceHref, resolveClassRoute, resolveClassSelection, parseClassWorkspaceQuery, type ClassSection } from "@/lib/class-navigation";
 import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
 import { buildWorkbookPages, workbookWidths } from "@/lib/scorebook-layout";
 
@@ -37,6 +37,7 @@ type OverviewData = {
   enrollment: Array<{ id: string; label: string; title: string; code: string; count: number }>;
   today: string;
   todayClasses: TodayClass[];
+  completedTodayCount: number;
   upcoming: { attendance: OverviewItem[]; assessments: OverviewItem[] };
 };
 
@@ -464,6 +465,9 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   const [bulkScoresOpen, setBulkScoresOpen] = useState(false); const [bulkFileName, setBulkFileName] = useState(""); const [bulkOperations, setBulkOperations] = useState<Array<{enrollmentId:string;assessmentId:string;points:number|null;remark:"EXCUSED"|"ABSENT"|"DID_NOT_SUBMIT"|null}>>([]); const [bulkRowsPreview, setBulkRowsPreview] = useState<Array<{row:number;student:string;studentNumber:string;cells:number;errors:string[]}>>([]); const [bulkErrors, setBulkErrors] = useState<string[]>([]);
   const [gradeChangeEnrollmentId, setGradeChangeEnrollmentId] = useState(""); const [gradeChangeGrade, setGradeChangeGrade] = useState("AUTO"); const [gradeChangeRemark, setGradeChangeRemark] = useState("AUTO"); const [gradeChangeReason, setGradeChangeReason] = useState("");
   const [attendanceQuickOpenId, setAttendanceQuickOpenId] = useState(initialAttendanceToday && initialClassId ? initialClassId : "");
+  // A lightweight attendance response is sufficient for attendance, while
+  // the other class tabs require the complete academic record.
+  const loadedClassRef = useRef<{ id: string; mode: "attendance" | "full" } | null>(null);
   const workbookPendingRef = useRef<Map<string, WorkbookChange>>(new Map());
   const workbookTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const workbookInflightRef = useRef<Promise<boolean> | null>(null);
@@ -544,12 +548,16 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     setTab("classes");
     setClassNavOpen(true);
     const href = classWorkspaceHref(user.school.slug, subjectId, section, options, subjects);
-    if (replace) router.replace(href, { scroll: false });
-    else router.push(href);
+    // We already have the teacher-scoped class catalog and mounted portal.
+    // Native history is supported by the Next.js App Router; avoid a second
+    // server-component round-trip when opening a workspace from Overview.
+    if (replace) window.history.replaceState(null, "", href);
+    else if (window.location.pathname + window.location.search !== href) window.history.pushState(null, "", href);
   }
   function openClassSection(section: ClassSection) {
     setClassSection(section);
-    if (activeId) router.replace(classWorkspaceHref(user.school.slug, activeId, section, classStudentFilter ? { student: classStudentFilter } : undefined, subjects), { scroll: false });
+    if (activeId) window.history.replaceState(null, "",
+      classWorkspaceHref(user.school.slug, activeId, section, classStudentFilter ? { student: classStudentFilter } : undefined, subjects));
   }
   useEffect(() => { setTab(initialPage); }, [initialPage]);
   useEffect(() => {
@@ -559,8 +567,45 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     setClassStudentFilter(initialClassStudent);
     if (initialAttendanceToday && initialClassId) setAttendanceQuickOpenId(initialClassId);
   }, [teacher, initialPage, initialClassId, initialClassSection, initialClassStudent, initialAttendanceToday]);
+  // Restore a class or the Overview when navigating Back/Forward from
+  // a fast client-side class shortcut. Deep links remain checked on the server.
+  useEffect(() => {
+    if (!teacher) return;
+    const syncFromHistory = () => {
+      const root = `/${encodeURIComponent(user.school.slug)}`;
+      const pathname = window.location.pathname;
+      if (pathname === `${root}/overview`) { setTab("overview"); return; }
+      if (pathname === `${root}/profile`) { setTab("profile"); return; }
+      const classPrefix = `${root}/classes/`;
+      if (pathname.startsWith(classPrefix)) {
+        const slug = decodeURIComponent(pathname.slice(classPrefix.length));
+        const selected = resolveClassRoute(slug, subjects);
+        if (!selected) return;
+        const params = new URLSearchParams(window.location.search);
+        const route = parseClassWorkspaceQuery({
+          section: params.get("section") || undefined,
+          student: params.get("student") || undefined,
+          attendanceToday: params.get("attendanceToday") || undefined
+        });
+        setActiveId(selected.id);
+        setClassSection(route.section);
+        setClassStudentFilter(route.student);
+        setTab("classes");
+      }
+    };
+    window.addEventListener("popstate", syncFromHistory);
+    return () => window.removeEventListener("popstate", syncFromHistory);
+  }, [teacher, subjects, user.school.slug]);
   async function loadSubjects() { const d = await api("/api/teacher/subjects"); setSubjects(d.subjects); setOverviewRefresh(value => value + 1); }
-  async function loadDetail(id = activeId) { if (!id) { setDetail(null); return; } setLoadingDetail(true); try { const d = await api(`/api/teacher/subjects/${id}`); setDetail(d.subject); } finally { setLoadingDetail(false); } }
+  async function loadDetail(id = activeId) {
+    if (!id) { setDetail(null); loadedClassRef.current = null; return; }
+    setLoadingDetail(true);
+    try {
+      const d = await api(`/api/teacher/subjects/${id}`);
+      loadedClassRef.current = { id, mode: "full" };
+      setDetail(d.subject);
+    } finally { setLoadingDetail(false); }
+  }
   async function loadGrades() { const d = await api("/api/student/grades"); setGrades(d.grades); }
   useEffect(() => { (teacher ? loadSubjects() : loadGrades()).catch(e => setErr(e.message)).finally(() => setLoading(false)); }, []);
   useEffect(() => {
@@ -597,20 +642,32 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   useEffect(() => { if (window.localStorage.getItem(onboardingStorageKey) !== "done") setOnboardingOpen(true); }, [onboardingStorageKey]);
   useEffect(() => { setSidebarCollapsed(window.localStorage.getItem("saga-sidebar-collapsed") === "true"); }, []);
   useEffect(() => { if (teacher && tab === "classes") setClassNavOpen(true); }, [teacher, tab]);
+  const activeClassAvailable = subjects.some(subject => subject.id === activeId);
   useEffect(() => {
-    if (!teacher || loading || !activeId || !subjects.some(subject => subject.id === activeId)) {
-      setDetail(null);
-      return;
-    }
-    let cancelled = false;
-    setDetail(current => current?.id === activeId ? current : null);
+    // Do not load a full class record while the user is on Overview.
+    if (!teacher || loading || tab !== "classes") return;
+    if (!activeId || !activeClassAvailable) { setDetail(null); loadedClassRef.current = null; return; }
+    const mode = classSection === "attendance" ? "attendance" : "full";
+    const loaded = loadedClassRef.current;
+    if (loaded?.id === activeId && (loaded.mode === "full" || mode === "attendance")) return;
+    const controller = new AbortController();
+    if (loaded?.id !== activeId || (mode === "full" && loaded.mode === "attendance")) setDetail(null);
     setLoadingDetail(true);
-    api(`/api/teacher/subjects/${activeId}`)
-      .then(result => { if (!cancelled) setDetail(result.subject); })
-      .catch(error => { if (!cancelled) setErr(error instanceof Error ? error.message : "Could not load class records."); })
-      .finally(() => { if (!cancelled) setLoadingDetail(false); });
-    return () => { cancelled = true; };
-  }, [teacher, loading, activeId, subjects.some(subject => subject.id === activeId)]);
+    const endpoint = mode === "attendance"
+      ? `/api/teacher/subjects/${activeId}/attendance`
+      : `/api/teacher/subjects/${activeId}`;
+    api(endpoint, { signal: controller.signal })
+      .then(result => {
+        if (controller.signal.aborted) return;
+        loadedClassRef.current = { id: activeId, mode };
+        setDetail(result.subject);
+      })
+      .catch(error => {
+        if (!controller.signal.aborted) setErr(error instanceof Error ? error.message : "Could not load class records.");
+      })
+      .finally(() => { if (!controller.signal.aborted) setLoadingDetail(false); });
+    return () => controller.abort();
+  }, [teacher, loading, tab, activeId, classSection, activeClassAvailable]);
   useEffect(() => {
     if (!attendanceQuickOpenId || detail?.id !== attendanceQuickOpenId) return;
     const scheduledToday = overviewData?.today || todayDateInput();
@@ -1206,9 +1263,9 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   <article className="surface overview-upcoming-card">
     <h3>Upcoming attendance</h3><p>Scheduled meetings, attendance type, and recording progress.</p>
     <div className="today-attendance-shortcuts"><div className="today-attendance-heading"><b>Classes scheduled today</b><small>{overviewData.todayClasses.length ? new Date(`${overviewData.today}T00:00:00`).toLocaleDateString(undefined,{weekday:"long",month:"short",day:"numeric"}) : "Quick access for today’s class meetings"}</small></div>
-      {overviewData.todayClasses.some(item=>item.canRecordAttendance) ? <div className="today-attendance-list">{overviewData.todayClasses.filter(item=>item.canRecordAttendance).map(item=><button type="button" className="today-attendance-button" key={item.id} onClick={()=>openClass(item.id, "attendance", { attendanceToday: true })}><span><b>{item.classId || item.code} · {item.title}</b><small>{item.schedule.join(" · ")}</small></span><strong>Record attendance <span aria-hidden="true">→</span></strong></button>)}</div> : overviewData.todayClasses.length ? <div className="today-attendance-empty">All classes scheduled today are finalized.</div> : <div className="today-attendance-empty">No classes match a saved schedule for today.</div>}
+      {overviewData.todayClasses.some(item=>item.canRecordAttendance) ? <div className="today-attendance-list">{overviewData.todayClasses.filter(item=>item.canRecordAttendance).map(item=><button type="button" className="today-attendance-button" key={item.id} onClick={()=>openClass(item.id, "attendance", { attendanceToday: true })}><span><b>{item.classId || item.code} · {item.title}</b><small>{item.schedule.join(" · ")}</small></span><strong>Record attendance <span aria-hidden="true">→</span></strong></button>)}</div> : overviewData.todayClasses.length ? <div className="today-attendance-empty">{overviewData.completedTodayCount === overviewData.todayClasses.length ? "✓ Today's attendance is already recorded." : "No outstanding attendance entries for today's editable classes."}</div> : <div className="today-attendance-empty">No classes match a saved schedule for today.</div>}
     </div>
-    {overviewData.upcoming.attendance.length ? <ul className="overview-work-list">{overviewData.upcoming.attendance.map(item=><li key={item.id}><button type="button" className="overview-work-item attendance" onClick={()=>openClass(item.subjectId, "attendance")}><span className="overview-work-copy"><b>{item.title}</b><small>{item.code} · {item.subjectTitle}</small><span className="overview-work-meta"><i>{item.attendanceType==="ONLINE"?"Online":item.attendanceType==="FACE_TO_FACE"?"Face-to-Face":"Type not set"}</i>{item.scheduleOverrideReason&&<i className="makeup">Make-up · {item.scheduleOverrideReason}</i>}{(()=>{const marked=item.markedCount||0;const total=item.studentCount||0;const complete=total>0&&marked>=total;return <i className={marked===0?"status pending":complete?"status complete":"status progress"}>{marked===0?"Not recorded":complete?"Recorded":`${marked}/${total} marked`}</i>})()}</span></span><time>{formatOverviewDate(item.date)}</time></button></li>)}</ul> : <div className="overview-chart-empty">No attendance days are scheduled from today onward.</div>}
+    {overviewData.upcoming.attendance.length ? <ul className="overview-work-list">{overviewData.upcoming.attendance.map(item=><li key={item.id}><button type="button" className="overview-work-item attendance" onClick={()=>openClass(item.subjectId, "attendance")}><span className="overview-work-copy"><b>{item.title}</b><small>{item.code} · {item.subjectTitle}</small><span className="overview-work-meta"><i>{item.attendanceType==="ONLINE"?"Online":item.attendanceType==="FACE_TO_FACE"?"Face-to-Face":"Type not set"}</i>{item.scheduleOverrideReason&&<i className="makeup">Make-up · {item.scheduleOverrideReason}</i>}{(()=>{const marked=item.markedCount||0;const total=item.studentCount||0;const complete=total>0&&marked>=total;return <i className={marked===0?"status pending":complete?"status complete":"status progress"}>{marked===0?"Not recorded":complete?"Recorded":`${marked}/${total} marked`}</i>})()}</span></span><time>{formatOverviewDate(item.date)}</time></button></li>)}</ul> : <div className="overview-chart-empty">No pending attendance days. Completed records are available in each class’s Attendance tab.</div>}
   </article>
   <article className="surface overview-upcoming-card"><h3>Upcoming assessments</h3><p>Dated activities and tests in your classes.</p>{overviewData.upcoming.assessments.length ? <ul className="overview-work-list">{overviewData.upcoming.assessments.map(item=><li key={item.id}><button type="button" className="overview-work-item" onClick={()=>openClass(item.subjectId, "items")}><span className="overview-work-copy"><b>{item.title}</b><small>{item.code} · {item.subjectTitle}</small></span><time>{formatOverviewDate(item.date)}</time></button></li>)}</ul> : <div className="overview-chart-empty">Nothing scheduled yet.</div>}</article>
 </div>
