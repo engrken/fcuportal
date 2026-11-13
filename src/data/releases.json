@@ -1,0 +1,16 @@
+[
+  {
+    "version": "0.2.0-beta.1",
+    "date": "2026-11-13",
+    "kind": "feature",
+    "changes": [
+      "Added a consistent copyright and release-version footer across SAGA, including a link to this version history.",
+      "Improved My Classes navigation: desktop hover opens the menu, while mobile uses tap-to-expand without selecting a class.",
+      "Added Student ID or email sign-in for registered students and Faculty IDs for teacher registration and profiles.",
+      "Added existing-school selection and a Not listed option to teacher signup.",
+      "Expanded Tenant Operations with school health, subscription follow-ups, verification totals, activity and payment reporting.",
+      "Improved student grade summaries, on-demand assessment details, grade simulation navigation and mobile layouts.",
+      "Optimized class records, workbook score saving, roster imports and attendance completion checks."
+    ]
+  }
+]
