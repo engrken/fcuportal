@@ -26,3 +26,34 @@ export async function POST(request: Request) {
   await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "created", entity: "subject", entityId: subject.id } });
   return NextResponse.json({ subject }, { status: 201 });
 }
+
+const visibilitySchema = z.object({
+  subjectIds: z.array(z.string().min(1)).min(1).max(200),
+  isPublished: z.boolean()
+});
+
+export async function PATCH(request: Request) {
+  const teacher = await requireRole("TEACHER");
+  if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const parsed = visibilitySchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: "Select valid classes and a visibility setting." }, { status: 400 });
+  const ids = [...new Set(parsed.data.subjectIds)];
+  const owned = await prisma.subject.findMany({
+    where: { id: { in: ids }, teacherId: teacher.id, schoolId: teacher.schoolId },
+    select: { id: true, isPublished: true }
+  });
+  if (owned.length !== ids.length) return NextResponse.json({ error: "A selected class was not found or is not yours." }, { status: 403 });
+  const changed = owned.filter(subject => subject.isPublished !== parsed.data.isPublished).map(subject => subject.id);
+  if (changed.length) {
+    await prisma.$transaction(async tx => {
+      await tx.subject.updateMany({
+        where: { id: { in: changed }, teacherId: teacher.id, schoolId: teacher.schoolId },
+        data: { isPublished: parsed.data.isPublished }
+      });
+      await tx.auditEvent.createMany({
+        data: changed.map(id => ({ actorId: teacher.id, entity: "subject", entityId: id, action: parsed.data.isPublished ? "made student grades visible" : "hid student grades" }))
+      });
+    });
+  }
+  return NextResponse.json({ ok: true, updated: changed.length }, { headers: { "Cache-Control": "no-store" } });
+}

@@ -38,7 +38,20 @@ export async function PATCH(request: Request, context: Context) {
   const teacher = await requireRole("TEACHER"); if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { subjectId } = await context.params; const subject = await ownedSubject(subjectId, teacher.id, teacher.schoolId);
   if (!subject) return NextResponse.json({ error: "Subject not found" }, { status: 404 });
-  const input = await request.json();
+  const input = await request.json().catch(() => null);
+  if (!input || typeof input !== "object" || Array.isArray(input)) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  if ("setStudentVisibility" in input) {
+    const parsed = z.object({ setStudentVisibility: z.boolean() }).safeParse(input);
+    if (!parsed.success) return NextResponse.json({ error: "Choose visible or hidden." }, { status: 400 });
+    const visible = parsed.data.setStudentVisibility;
+    if (subject.isPublished !== visible) {
+      await prisma.$transaction([
+        prisma.subject.update({ where: { id: subjectId }, data: { isPublished: visible } }),
+        prisma.auditEvent.create({ data: { actorId: teacher.id, entity: "subject", entityId: subjectId, action: visible ? "made student grades visible" : "hid student grades" } })
+      ]);
+    }
+    return NextResponse.json({ ok: true, isPublished: visible }, { headers: { "Cache-Control": "no-store" } });
+  }
   if ("gradeChange" in input) {
     if (subject.gradeStatus !== "VERIFIED") return NextResponse.json({ error: "Grade changes are available after this class is verified to the Registrar." }, { status: 409 });
     const parsed = gradeChangeSchema.safeParse(input);
@@ -117,8 +130,8 @@ export async function PATCH(request: Request, context: Context) {
     const missingScores = subject.enrollments.filter(enrollment => !enrollment.remarks && subject.assessments.some(item => !enrollment.scores.some(score => score.assessmentId === item.id && (score.points !== null || !!score.remark)))).length;
     if (missingScores) return NextResponse.json({ error: `${missingScores} student record(s) have missing assessment scores. Enter a score or set an item status such as Excused, Absent, or Did not submit.` }, { status: 400 });
     const now = new Date();
-    await prisma.subject.update({ where: { id: subjectId }, data: { gradeStatus: "SUBMITTED", isPublished: true, submittedAt: now, verifiedAt: null } });
-    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "submitted provisional grades to students", entity: "subject", entityId: subjectId } });
+    await prisma.subject.update({ where: { id: subjectId }, data: { gradeStatus: "SUBMITTED", submittedAt: now, verifiedAt: null } });
+    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "submitted class grade record; student visibility unchanged", entity: "subject", entityId: subjectId } });
     return NextResponse.json({ ok: true, gradeStatus: "SUBMITTED", submittedAt: now, verifiedAt: null });
   }
   if ("verifyGrades" in input) {

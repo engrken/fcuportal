@@ -51,7 +51,7 @@ export async function POST(request: Request) {
   }
 
   const enrollments = await prisma.enrollment.findMany({
-    where: { studentNumber: profile.studentNumber, subject: { schoolId, gradeStatus: { in: ["SUBMITTED", "VERIFIED"] } } },
+    where: { studentNumber: profile.studentNumber, subject: { schoolId, isPublished: true } },
     include: { subject: { include: {
       teacher: { select: { fullName: true } }, gradeBands: true,
       categories: { orderBy: { sortOrder: "asc" }, include: { assessments: { orderBy: { createdAt: "asc" }, include: { scores: { where: { enrollment: { studentNumber: profile.studentNumber } }, select: { enrollmentId: true, points: true, remark: true } } } } } }

@@ -11,7 +11,7 @@ export async function GET() {
     ...(student.studentNumber ? [{ studentNumber: { equals: student.studentNumber.trim(), mode: "insensitive" as const } }] : [])
   ];
   const enrollments = await prisma.enrollment.findMany({
-    where: { OR: enrollmentIdentity, subject: { schoolId: student.schoolId, gradeStatus: { in: ["SUBMITTED", "VERIFIED"] } } },
+    where: { OR: enrollmentIdentity, subject: { schoolId: student.schoolId, isPublished: true } },
     include: {
       subject: {
         include: {
@@ -52,5 +52,5 @@ export async function GET() {
     });
     return { id: enrollment.id, code: subject.code, title: subject.title, term: subject.term, academicYear: subject.academicYear, teacher: subject.teacher.fullName, status: subject.gradeStatus, submittedAt: subject.submittedAt, verifiedAt: subject.verifiedAt, percent, finalGrade: enrollment.finalGradeOverride ?? equivalent.finalGrade, remarks: enrollment.remarks || equivalent.remarks, categories };
   });
-  return NextResponse.json({ grades });
+  return NextResponse.json({ grades }, { headers: { "Cache-Control": "no-store" } });
 }
