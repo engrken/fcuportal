@@ -538,7 +538,12 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
       return;
     }
     setTab(page);
-    router.push(`/${encodeURIComponent(user.school.slug)}/${page}`);
+    const href = `/${encodeURIComponent(user.school.slug)}/${page}`;
+    if (!teacher) {
+      // Keep the student's grade summaries and simulation selection in memory
+      // while moving between authorized pages, avoiding a full portal reload.
+      if (window.location.pathname !== href) window.history.pushState(null, "", href);
+    } else router.push(href);
   }
   function openClass(subjectId: string, section: ClassSection = "setup", options: { student?: string; attendanceToday?: boolean } = {}, replace = false) {
     const subject = subjects.find(item => item.id === subjectId);
@@ -579,12 +584,13 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   // Restore a class or the Overview when navigating Back/Forward from
   // a fast client-side class shortcut. Deep links remain checked on the server.
   useEffect(() => {
-    if (!teacher) return;
     const syncFromHistory = () => {
       const root = `/${encodeURIComponent(user.school.slug)}`;
       const pathname = window.location.pathname;
       if (pathname === `${root}/overview`) { setTab("overview"); return; }
       if (pathname === `${root}/profile`) { setTab("profile"); return; }
+      if (!teacher && pathname === `${root}/simulator`) { setTab("simulator"); return; }
+      if (!teacher) return;
       const classPrefix = `${root}/classes/`;
       if (pathname.startsWith(classPrefix)) {
         const slug = decodeURIComponent(pathname.slice(classPrefix.length));
