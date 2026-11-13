@@ -1011,7 +1011,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   </tr>
   {scorebookHeaderRows.rows.slice(1).map((row,index)=><tr key={`category-level-${index+1}`}>{row.map(({category,colSpan,rowSpan})=><th className="score-sheet-subcategory" key={category.id} colSpan={colSpan} rowSpan={rowSpan}><span title={category.name}>{scoreSheetCategoryLabel(category.name)}</span><small>{categoryWeightLabel(category,detail.categories)}</small></th>)}</tr>)}
   <tr>{scorebookDisplayColumns.map(column => column.kind === "assessment"
-    ? <th className="score-sheet-assessment" key={column.item.id} title={`${column.item.title} · Perfect score ${column.item.maxScore}${column.item.dueDate ? ` · ${new Date(column.item.dueDate).toLocaleDateString()` : ""}`}><span>{column.item.title}</span><small>Max {column.item.maxScore}</small></th>
+    ? <th className="score-sheet-assessment" key={column.item.id} title={`${column.item.title} · Perfect score ${column.item.maxScore}${column.item.dueDate ? " · " + new Date(column.item.dueDate).toLocaleDateString() : ""}`}><span>{column.item.title}</span><small>Max {column.item.maxScore}</small></th>
     : <th className={`score-sheet-category-subtotal ${column.kind === "weight" ? "score-sheet-weight-head" : "score-sheet-equiv-head"}`} key={`${column.category.id}-${column.kind}`} title={`${column.category.name} · ${column.kind === "equivalent" ? "Equivalent percentage after category base conversion" : "Earned course contribution out of the configured category weight"}`}>
         {column.kind === "equivalent" ? <>Equivalent<small>%</small></> : <>Earned Weight<small>{effectiveCategoryWeight(column.category,detail.categories).toFixed(2)}% max</small></>}
       </th>
