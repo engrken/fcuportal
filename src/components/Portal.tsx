@@ -1092,7 +1092,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   <tr>{scorebookDisplayColumns.map(column => column.kind === "assessment"
     ? <th className="score-sheet-assessment" key={column.item.id} title={`${column.item.title} · Perfect score ${column.item.maxScore}${column.item.dueDate ? " · " + new Date(column.item.dueDate).toLocaleDateString() : ""}`}><span>{column.item.title}</span><small>Max {column.item.maxScore}</small></th>
     : <th className="score-sheet-category-subtotal score-sheet-equiv-head" key={`${column.category.id}-equivalent`} title={`${column.category.name} · Weighted equivalent: ${categoryWeightLabel(column.category,detail.categories)} maximum`}>
-        Equivalent<small>${column.category.weight.toFixed(2)}% max</small>
+        Equivalent<small>{column.category.weight.toFixed(2)}% max</small>
       </th>
   )}</tr>
 </thead><tbody>{filteredEnrollments.map((enrollment,index)=>{
