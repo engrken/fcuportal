@@ -12,7 +12,8 @@ const batchSchema = z.object({
     assessmentId: z.string().min(1),
     points: z.number().finite().min(0).nullable(),
     remark: z.enum(["EXCUSED", "ABSENT", "DID_NOT_SUBMIT", "PRESENT"]).nullable()
-  })).min(1).max(5000)
+  })).min(1).max(5000),
+  source: z.enum(["workbook"]).optional()
 });
 
 export async function POST(request: Request, context: Context) {
@@ -56,7 +57,16 @@ export async function POST(request: Request, context: Context) {
             "updatedAt" = CURRENT_TIMESTAMP
         `);
       }
-      await tx.auditEvent.create({ data: { actorId: teacher.id, action: `bulk imported ${parsed.data.scores.length} score cell(s)`, entity: "subject", entityId: subjectId } });
+      if (parsed.data.source === "workbook") {
+        await tx.auditEvent.createMany({
+          data: parsed.data.scores.map(score => ({
+            actorId: teacher.id, entity: "score", entityId: `${score.enrollmentId}:${score.assessmentId}`,
+            action: score.remark ? `updated item status ${score.remark}` : "updated score"
+          }))
+        });
+      } else {
+        await tx.auditEvent.create({ data: { actorId: teacher.id, action: `bulk imported ${parsed.data.scores.length} score cell(s)`, entity: "subject", entityId: subjectId } });
+      }
     }, { timeout: 20000 });
   } catch (error) {
     console.error("Bulk score import failed", error);
