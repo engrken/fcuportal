@@ -1,5 +1,17 @@
 [
   {
+    "version": "0.5.0-beta.2",
+    "date": "2026-11-14",
+    "kind": "fix",
+    "changes": [
+      "Replaced the separate Test the Software imitation with one-click guest access to SAGA's actual Teacher and Student pages.",
+      "Created a dedicated fictional college, class roster, assessments and grade records for the authentic read-only demo.",
+      "Demo sessions expire in 45 minutes and cannot modify any SAGA API; school and account permissions remain enforced.",
+      "Retained the original editable sample simulator under a clearly labeled optional Practice Simulator page.",
+      "Kept the demo school hidden from regular registration and added security regression checks. No Dean role was introduced."
+    ]
+  },
+  {
     "version": "0.5.0-beta.1",
     "date": "2026-11-14",
     "kind": "feature",
