@@ -58,7 +58,7 @@ export default function ActualDemoEntry() {
         <p>These options open the same Teacher and Student pages used by registered users—not a recreated dashboard. Choose a role and look around the real system.</p>
       </div>
       {error && <div className={styles.notice} role="alert">{error}</div>}
-      <div className={styles.roleGrid} style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))", maxWidth: 820, margin: "auto" }}>
+      <div className={styles.actualRoleGrid}>
         {roles.map(item => <article className={styles.roleCard} key={item.key}>
           <span className={styles.roleIcon} aria-hidden="true">{item.icon}</span>
           <h2>{item.title}</h2>
