@@ -9,8 +9,11 @@ const inputSchema = z.object({ role: z.enum(["TEACHER", "STUDENT"]) });
 export async function POST(request: Request) {
   const origin = request.headers.get("origin");
   // Same-origin only; do not allow other sites to force guest sign-ins.
-  if (origin && new URL(origin).origin !== new URL(request.url).origin) {
-    return NextResponse.json({ error: "Cross-site demo sign-in is not allowed." }, { status: 403 });
+  if (origin) {
+    let allowed = false;
+    try { allowed = new URL(origin).origin === new URL(request.url).origin; }
+    catch { allowed = false; }
+    if (!allowed) return NextResponse.json({ error: "Cross-site demo sign-in is not allowed." }, { status: 403 });
   }
   const parsed = inputSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Choose Teacher or Student." }, { status: 400 });
