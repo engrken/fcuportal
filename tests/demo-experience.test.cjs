@@ -2,47 +2,47 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-
 const root = path.resolve(__dirname, "..");
 const read = relative => fs.readFileSync(path.join(root, relative), "utf8");
 
-test("the demo is public, discoverable, and uses only existing experiences", () => {
+test("public demo opens authentic SAGA screens, with a separately labeled practice simulator", () => {
   const page = read("src/app/demo/page.tsx");
+  const chooser = read("src/components/ActualDemoEntry.tsx");
+  const practice = read("src/app/demo/practice/page.tsx");
   const landing = read("src/components/LandingPage.tsx");
-  const demo = read("src/components/DemoWorkspace.tsx");
-  assert.match(page, /<DemoWorkspace\s*\/>/);
+  const promo = read("src/components/DemoPromo.tsx");
+  assert.match(page, /<ActualDemoEntry\s*\/>/);
+  assert.match(practice, /<DemoWorkspace\s*\/>/);
+  assert.match(chooser, /api\/auth\/demo/);
+  assert.match(chooser, /"TEACHER"/);
+  assert.match(chooser, /"STUDENT"/);
+  assert.doesNotMatch(chooser, /"DEAN"/);
+  assert.doesNotMatch(chooser, /"ADMIN"/);
+  assert.match(chooser, /read-only/i);
+  assert.match(promo, /actual Teacher or Student portal/);
   assert.match(landing, /<DemoPromo\s*\/>/);
   assert.match(landing, /href="\/demo"/);
-  for (const role of ['role: "teacher"', 'role: "student"', 'role: "admin"']) {
-    assert.ok(demo.includes(role), role);
-  }
-  assert.doesNotMatch(demo, /role:\s*["']dean["']/i);
 });
 
-test("public demo is local-only and cannot call account or academic record APIs", () => {
-  const files = [
-    "src/app/demo/page.tsx",
-    "src/components/DemoWorkspace.tsx",
-    "src/components/DemoPromo.tsx"
-  ].map(read);
-  for (const content of files) {
-    assert.doesNotMatch(content, /\bfetch\s*\(/);
-    assert.doesNotMatch(content, /@\/lib\/(auth|prisma)/);
-    assert.doesNotMatch(content, /createSession|requireTenantManager|localStorage|sessionStorage/);
-  }
-  const demo = files[1];
+test("older editable practice simulator remains local-only and is not mislabeled as actual SAGA", () => {
+  const demo = read("src/components/DemoWorkspace.tsx");
+  const practice = read("src/app/demo/practice/page.tsx");
+  assert.doesNotMatch(demo, /\bfetch\s*\(/);
+  assert.doesNotMatch(demo, /@\/lib\/(auth|prisma)/);
   assert.match(demo, /setMarks\(/);
   assert.match(demo, /setAttendance\(/);
   assert.match(demo, /reset\s*=\s*\(\)/);
-  assert.match(demo, /Fictional data only/);
+  assert.match(practice, /not the real portal/i);
 });
 
-test("the demo is navigable and styles are scoped", () => {
-  const component = read("src/components/DemoWorkspace.tsx");
+test("authentic demo navigation and styling remain mobile and theme aware", () => {
+  const chooser = read("src/components/ActualDemoEntry.tsx");
   const css = read("src/components/DemoWorkspace.module.css");
-  assert.match(component, /aria-label="Demo navigation"/);
-  assert.match(component, /aria-label=\{"Attendance for "/);
-  assert.match(component, /role="status"/);
-  assert.match(css, /@media\(max-width:760px\)/);
+  const realBanner = read("src/components/RealDemoBanner.tsx");
+  const portal = read("src/components/Portal.tsx");
+  assert.match(chooser, /actualRoleGrid/);
+  assert.match(css, /@media\(max-width:760px\)\{\.actualRoleGrid/);
   assert.match(css, /data-saga-theme="dark"/);
+  assert.match(portal, /user\.isDemo && <RealDemoBanner/);
+  assert.match(realBanner, /READ-ONLY DEMO/);
 });

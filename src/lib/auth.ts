@@ -2,6 +2,7 @@ import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { emailDeliveryConfigured } from "@/lib/mailer";
+import { DEMO_SCHOOL_SLUG, isDemoIdentity } from "@/lib/demo-access";
 
 const COOKIE = "fcu_portal_session";
 function key() {
@@ -10,18 +11,19 @@ function key() {
   return new TextEncoder().encode(secret);
 }
 
-export async function createSession(user: { id: string; role: string; schoolId: string; emailIdentityChangedAt?: Date | null }, managerVerified = false) {
+export async function createSession(user: { id: string; role: string; schoolId: string; emailIdentityChangedAt?: Date | null }, managerVerified = false, demo = false) {
   const token = await new SignJWT({
     role: user.role,
     schoolId: user.schoolId,
     emailVerified: true,
-    managerVerified,
+    managerVerified: demo ? false : managerVerified,
+    demo,
     emailIdentityChangedAt: user.emailIdentityChangedAt?.getTime() ?? null
   }).setProtectedHeader({ alg: "HS256" })
-    .setSubject(user.id).setIssuedAt().setExpirationTime("7d").sign(key());
+    .setSubject(user.id).setIssuedAt().setExpirationTime(demo ? "45m" : "7d").sign(key());
   (await cookies()).set(COOKIE, token, {
     httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax",
-    path: "/", maxAge: 60 * 60 * 24 * 7
+    path: "/", maxAge: demo ? 45 * 60 : 60 * 60 * 24 * 7
   });
 }
 
@@ -36,14 +38,20 @@ export async function getSession() {
     const { payload } = await jwtVerify(token, key());
     if (!payload.sub || payload.emailVerified !== true) return null;
     const user = await prisma.user.findUnique({ where: { id: payload.sub }, select: { id: true, role: true, schoolId: true, fullName: true, email: true, studentNumber: true, facultyId: true, courseProgram: true, yearLevel: true, profileImagePath: true, passwordChangedAt: true, emailVerifiedAt: true, emailIdentityChangedAt: true, tenantManagerEmail: true, school: { select: { id: true, slug: true, name: true, shortName: true, portalTitle: true, logoText: true, logoPath: true, primaryColor: true, privacyController: true, privacyContactEmail: true, privacyPolicyUrl: true, isActive: true, subscriptionStatus: true, subscriptionExpiresAt: true } } } });
-    if (user?.passwordChangedAt && (!payload.iat || user.passwordChangedAt.getTime() >= payload.iat * 1000)) return null;
+    if (!user || payload.role !== user.role || payload.schoolId !== user.schoolId) return null;
+    const isDemo = payload.demo === true;
+    if (isDemo && (user.school.slug !== DEMO_SCHOOL_SLUG || !isDemoIdentity(user))) return null;
+    // Demo identities cannot be used with normal authenticated sessions.
+    if (!isDemo && user.school.slug === DEMO_SCHOOL_SLUG) return null;
+    if (user.passwordChangedAt && (!payload.iat || user.passwordChangedAt.getTime() >= payload.iat * 1000)) return null;
     if (!user?.emailVerifiedAt || !user.school.isActive || user.school.subscriptionStatus !== "ACTIVE" || (user.school.subscriptionExpiresAt && user.school.subscriptionExpiresAt <= new Date())) return null;
     if ((payload.emailIdentityChangedAt ?? null) !== (user.emailIdentityChangedAt?.getTime() ?? null)) return null;
     const { passwordChangedAt: _passwordChangedAt, emailIdentityChangedAt: _emailIdentityChangedAt, tenantManagerEmail: _tenantManagerEmail, ...sessionUser } = user;
-    const isTenantManager = payload.managerVerified === true && (await tenantManagerIdentity(user)) !== null;
+    const isTenantManager = !isDemo && payload.managerVerified === true && (await tenantManagerIdentity(user)) !== null;
     return {
       ...sessionUser,
       isTenantManager,
+      isDemo,
       emailDeliveryEnabled: emailDeliveryConfigured()
     };
   } catch { return null; }

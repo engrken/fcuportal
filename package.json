@@ -1,6 +1,6 @@
 {
   "name": "fcu-student-portal",
-  "version": "0.5.0-beta.1",
+  "version": "0.5.0-beta.2",
   "private": true,
   "type": "module",
   "engines": {
@@ -27,7 +27,7 @@
     "test:release": "node --test tests/footer-version.test.cjs",
     "test:invites": "node --test tests/class-invite-code.test.cjs",
     "test:theme": "node --test tests/theme-palette.test.cjs",
-    "test:demo": "node --test tests/demo-experience.test.cjs"
+    "test:demo": "node --test tests/demo-experience.test.cjs tests/authentic-demo-authorization.test.cjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",
