@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import styles from "./DemoWorkspace.module.css";
 
 type DemoRole = "teacher" | "student" | "admin";
@@ -50,7 +50,7 @@ function seedAttendance(): AttendanceBook {
     students.map((student, index) => [student.id, index === 4 ? "ABSENT" : index === 2 ? "EXCUSED" : "PRESENT"])
   )])) as AttendanceBook;
 }
-function seedStatuses(): Record<string, GradeStatus> { return { ece18: "SUBMITTED", ece23: "DRAFT" }; }
+function seedStatuses(): Record<string, GradeStatus> { return { ece18: "DRAFT", ece23: "SUBMITTED" }; }
 function seedVisibility(): Record<string, boolean> { return { ece18: true, ece23: true }; }
 function scorePercent(courseId: string, studentId: string, marks: Marks, attendance: AttendanceBook, predictedExam?: number) {
   const scores = marks[courseId]?.[studentId] || {};
@@ -277,6 +277,6 @@ function Status({ status }: { status: GradeStatus }) {
 function Metric({ label, value, hint }: { label: string; value: string; hint: string }) {
   return <article className={styles.metric}><span>{label}</span><strong>{value}</strong><small>{hint}</small></article>;
 }
-function Panel({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
+function Panel({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
   return <section className={styles.panel}><header className={styles.panelHead}><h2>{title}</h2><p>{subtitle}</p></header>{children}</section>;
 }
