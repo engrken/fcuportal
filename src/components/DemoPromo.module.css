@@ -1,0 +1,21 @@
+.section{max-width:1180px;margin:30px auto 50px;padding:40px;display:grid;grid-template-columns:1.1fr 1fr;gap:32px;align-items:center;border:1px solid #dfe7f5;border-radius:22px;background:linear-gradient(135deg,#eaf3ff,#f8fbff 60%,#eaf9f3);color:#1b3458}
+.copy{min-width:0}
+.eyebrow{font-size:11px;font-weight:850;letter-spacing:.15em;color:#2857ab}
+.copy h2{font-size:clamp(27px,3.2vw,38px);font-weight:850;letter-spacing:-.045em;margin:10px 0}
+.copy p{font-size:14px;line-height:1.75;color:#53647d;max-width:510px;margin-bottom:20px}
+.cta{display:inline-flex;gap:15px;align-items:center;padding:12px 18px;border-radius:10px;background:#2458d3;color:#fff!important;font-weight:750;text-decoration:none}
+.cta:hover{background:#1d47ac}
+.copy small{font-size:11px;display:block;margin-top:14px;color:#62718a}
+.roles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.role{min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:7px;border:1px solid #dfebfb;border-radius:13px;background:#fff;padding:20px 10px;min-height:148px;text-decoration:none;color:#223b63}
+.role:hover{border-color:#2458d3;box-shadow:0 7px 20px #194c9a14;color:#2458d3}
+.role>span{display:grid;place-items:center;width:40px;height:40px;border-radius:10px;background:#eaf1ff;font-size:25px;color:#2458d3}
+.role b{font-size:12px;font-weight:800}
+.role small{font-size:10px;line-height:1.4;color:#63738b}
+:global(body[data-saga-theme="dark"]) .section{background:linear-gradient(130deg,#172945,#192b34);border-color:#33475f;color:#e9f2ff}
+:global(body[data-saga-theme="dark"]) .copy p,:global(body[data-saga-theme="dark"]) .copy small{color:#b8c6da}
+:global(body[data-saga-theme="dark"]) .eyebrow{color:#9fbfff}
+:global(body[data-saga-theme="dark"]) .role{background:#213449;border-color:#344960;color:#e9f2ff}
+:global(body[data-saga-theme="dark"]) .role small{color:#bbcadb}
+@media(max-width:960px){.section{grid-template-columns:1fr;margin-left:20px;margin-right:20px}}
+@media(max-width:550px){.section{padding:22px;margin:20px 14px 35px}.roles{grid-template-columns:1fr}.role{flex-direction:row;justify-content:flex-start;text-align:left;min-height:0;padding:13px 16px}.role small{margin-left:auto;text-align:right}}
