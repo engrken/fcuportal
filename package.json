@@ -1,6 +1,6 @@
 {
   "name": "fcu-student-portal",
-  "version": "0.4.0-beta.1",
+  "version": "0.5.0-beta.1",
   "private": true,
   "type": "module",
   "engines": {
@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate status; fi && prisma generate && npm run test:grades && npm run test:classes && npm run test:simulation && npm run test:scorebook-layout && npm run test:tenant && npm run test:teacher-signup && npm run test:identity && npm run test:invites && npm run test:release && npm run test:theme && next build",
+    "build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate status; fi && prisma generate && npm run test:grades && npm run test:classes && npm run test:simulation && npm run test:scorebook-layout && npm run test:tenant && npm run test:teacher-signup && npm run test:identity && npm run test:invites && npm run test:release && npm run test:theme && npm run test:demo && next build",
     "test:grades": "node --test tests/grades.test.cjs",
     "test:classes": "node --test tests/class-navigation.test.cjs",
     "postinstall": "prisma generate",
@@ -26,7 +26,8 @@
     "version:major": "node scripts/bump-release.mjs major",
     "test:release": "node --test tests/footer-version.test.cjs",
     "test:invites": "node --test tests/class-invite-code.test.cjs",
-    "test:theme": "node --test tests/theme-palette.test.cjs"
+    "test:theme": "node --test tests/theme-palette.test.cjs",
+    "test:demo": "node --test tests/demo-experience.test.cjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",
