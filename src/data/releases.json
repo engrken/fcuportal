@@ -1,5 +1,17 @@
 [
   {
+    "version": "0.5.0-beta.1",
+    "date": "2026-11-14",
+    "kind": "feature",
+    "changes": [
+      "Launched a public interactive Test the Software tour featuring Teacher, Student, and read-only Platform Administrator previews.",
+      "Teacher demo includes editable gradebook scores, attendance, grade visibility, and simulated submission states using fictional records.",
+      "Student demo includes sample grades and an isolated what-if score simulator; switching roles retains in-browser sample changes until reset.",
+      "Public demo data never invokes production authentication, grades, tenant management APIs, or Neon database writes.",
+      "Added responsive light and dark demo palettes, accessible navigation controls, and a landing-page entry point."
+    ]
+  },
+  {
     "version": "0.4.0-beta.1",
     "date": "2026-11-13",
     "kind": "feature",
