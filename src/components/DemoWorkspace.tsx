@@ -107,7 +107,7 @@ export default function DemoWorkspace() {
     setMarks(seedMarks());
     setAttendance(seedAttendance());
     setStatuses(seedStatuses());
-    setVisibility(seedVisibility());
+    setVisible(seedVisibility());
     setPredicted(95);
     setNotice("Sample records restored. No real SAGA records were affected.");
   };
